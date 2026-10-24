@@ -295,7 +295,7 @@ is pasted here.
 - [x] A1: page served, image downloaded, live edit visible.
 - [x] A2: ConfigMap edit visible without a restart; `subPath` counter-example.
 - [x] A3: `printenv` inside the pod and the precedence proof.
-- [ ] A4: `curl` from a second machine on the LAN.
+- [x] A4: `curl` from a second machine on the LAN.
 - [x] A5: 401 without credentials, 200 with them.
 - [x] A6: real 3/3, real rolling update with `maxUnavailable: 0`.
 - [x] A7: both databases read; host-side SQLite insert visible on reload.

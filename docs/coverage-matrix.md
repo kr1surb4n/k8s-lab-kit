@@ -33,7 +33,7 @@ summary is not a task list.
 | Serve a host directory, images included | A1 | `manifests/a1/`, `site/` | covered |
 | `index.html` from a ConfigMap, live updates | A2 | `manifests/a2/` | covered |
 | Who/when/where/mechanisms of env vars | A3 | runbook A3 + `scripts/env-demo.sh` | covered |
-| LAN access from another machine | A4 | `scripts/lab-tunnel.sh` | partial |
+| LAN access from another machine | A4 | `scripts/lab-tunnel.sh` | covered |
 | Secrets in a test deployment | A5 | `manifests/a5/` | covered |
 | 3 replicas, Service + Deployment lifecycle | A6 | `manifests/a6/`, `scripts/lab-*.sh` | covered |
 | Laravel + PostgreSQL + SQLite on disk | A7 | `manifests/a7/` | covered |

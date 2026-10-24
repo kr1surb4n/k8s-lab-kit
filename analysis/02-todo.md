@@ -69,15 +69,15 @@ Every phase ends with a verification step; do not start the next phase before it
 
 ---
 
-## Phase 5 — A4: LAN access (M)
+## Phase 5 — A4: LAN access (M) — **DONE**
 
-- [ ] From the host: `lab-tunnel.sh a6 --address 0.0.0.0 --port 8080`.
-- [ ] From a second machine: `curl http://<host-ip>:8080`.
-- [ ] Open the firewall if needed (`sudo ufw allow 8080/tcp`), then close it again.
-- [ ] Try `minikube tunnel` and record that the LoadBalancer IP is host-only.
-- [ ] Try `minikube service web --url` and record that it binds 127.0.0.1.
-- [ ] Write the comparison table (minikube / k3d / k3s / microk8s) with what each needs for LAN.
-- [ ] Capture the transcript including the second machine's `curl`.
+- [x] From the host: `lab-tunnel.sh a6 --address 0.0.0.0 --port 8080`.
+- [x] From a second machine: `curl http://<host-ip>:8080` → 200 (verified on LAN).
+- [x] Open the firewall if needed (`sudo ufw allow 8080/tcp`), then close it again.
+- [x] Try `minikube tunnel` and record that the LoadBalancer IP is host-only.
+- [x] Try `minikube service web --url` and record that it binds 127.0.0.1.
+- [x] Write the comparison table (minikube / k3d / k3s / microk8s) with what each needs for LAN.
+- [x] Capture the transcript including the second machine's `curl`.
 
 **Verify:** a page loads from another machine; the runbook states why the LoadBalancer alone is not enough.
 
