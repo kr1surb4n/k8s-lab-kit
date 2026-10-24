@@ -1,0 +1,17 @@
+# /etc/rancher/k3s/config.yaml
+# Used by clusters/k3s/install.sh. k3s reads this on every start.
+
+# Let the invoking user read the kubeconfig without sudo.
+write-kubeconfig-mode: "0644"
+
+# Traefik off so the lab can use ingress-nginx like the runbooks.
+disable:
+  - traefik
+
+# The ingress controller from the N1 exercise expects this label.
+node-label:
+  - "ingress-ready=true"
+
+# Keep the node able to host the whole lab plus a small observability stack.
+kubelet-arg:
+  - "max-pods=110"

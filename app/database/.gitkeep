@@ -1,0 +1,3 @@
+# The SQLite file the container mounts at database/database.sqlite.
+# The app creates it on the first request if it is missing.
+# This placeholder keeps the folder in Git; the real file is ignored.

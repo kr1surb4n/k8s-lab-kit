@@ -1,0 +1,52 @@
+# Values for kube-prometheus-stack, trimmed for a 6 GiB cluster.
+# The defaults assume a real cluster; these assume a laptop.
+alertmanager:
+  enabled: false
+
+grafana:
+  enabled: true
+  # No password in Git. The chart generates one; read it from the Secret.
+  persistence:
+    enabled: false
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 300Mi}
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    scrapeInterval: 30s
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 700Mi}
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 8Gi
+    # The lab's own ServiceMonitors do not carry the chart's release label.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+prometheusOperator:
+  resources:
+    requests: {cpu: 50m, memory: 100Mi}
+    limits: {memory: 250Mi}
+
+prometheus-node-exporter:
+  resources:
+    requests: {cpu: 20m, memory: 32Mi}
+    limits: {memory: 80Mi}
+
+kube-state-metrics:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 160Mi}

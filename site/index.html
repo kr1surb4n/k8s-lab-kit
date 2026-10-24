@@ -1,0 +1,22 @@
+# Site served by nginx in the A1 scenario.
+# Edit this file on the host and reload the page: no restart, no rebuild.
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>k8s lab — A1</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 3rem; background: #0f172a; color: #e2e8f0; }
+      code { background: #1e293b; padding: .15rem .4rem; border-radius: .25rem; }
+      .ok { color: #4ade80; }
+    </style>
+  </head>
+  <body>
+    <h1>k8s lab — A1</h1>
+    <p class="ok">This page comes from the host directory, mounted into the pod.</p>
+    <p>Edit <code>site/index.html</code>, then reload. Nothing is restarted.</p>
+    <p>The image below is served from the same directory, through the same nginx:</p>
+    <img src="images/logo.svg" alt="svg served from the same folder" width="180">
+    <p>Generated at: <code>replace-me-by-hand</code></p>
+  </body>
+</html>

@@ -1,0 +1,52 @@
+# Read-only access to the lab namespace, plus exec for jumping into pods.
+# Exec is powerful: it runs a process in an existing pod. Keep this Role in
+# k8s-lab only, never cluster-wide.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bastion
+  namespace: bastion
+---
+# A long-lived token for the jump pod. Kubernetes 1.24+ no longer creates one
+# automatically, and this is the one object that must be handled carefully.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bastion-token
+  namespace: bastion
+  annotations:
+    kubernetes.io/service-account.name: bastion
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: bastion-read
+  namespace: k8s-lab
+rules:
+  - apiGroups: [""]
+    resources: [pods, services, endpoints, configmaps, events]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets, statefulsets]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: bastion-read
+  namespace: k8s-lab
+subjects:
+  - kind: ServiceAccount
+    name: bastion
+    namespace: bastion
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: bastion-read

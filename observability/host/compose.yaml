@@ -1,0 +1,58 @@
+# Host-side monitoring that does not die with the cluster.
+#
+# Run this on the lab host or on a small always-on machine on the same LAN:
+#   cd observability/host
+#   cp .env.example .env && edit it
+#   docker compose up -d
+#
+# Prometheus here scrapes the host and the LAN directly. The in-cluster
+# Prometheus (observability/install.sh) can then remote-write here, or simply
+# be replaced by this one for host-level truth.
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+
+  blackbox:
+    image: prom/blackbox-exporter:v0.26.0
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set it in .env}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+
+volumes:
+  prom-data:
+  grafana-data:

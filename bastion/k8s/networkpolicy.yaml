@@ -1,0 +1,42 @@
+# Default deny for the jump pod: only the LAN may SSH in, and the pod may only
+# speak DNS, the API and cluster pods. Note: minikube's default CNI does not
+# enforce NetworkPolicy; k3d/k3s/kind with Calico or Cilium do.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bastion
+  namespace: bastion
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: bastion
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 192.168.1.0/24
+      ports:
+        - protocol: TCP
+          port: 22
+  egress:
+    # DNS.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The API server's ClusterIP range.
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.0/12
+      ports:
+        - protocol: TCP
+          port: 443
+    # Pods in the lab.
+    - to:
+        - ipBlock:
+            cidr: 10.244.0.0/16

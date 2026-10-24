@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bastion-sshd
+  namespace: bastion
+data:
+  # Kept short: only keys, one user, local forwards.
+  sshd_config: |
+    Port 22
+    HostKey /etc/ssh/keys/ssh_host_ed25519_key
+    AuthorizedKeysFile /home/labjump/.ssh/authorized_keys
+    PermitRootLogin no
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    PubkeyAuthentication yes
+    AllowUsers labjump
+    AllowAgentForwarding no
+    AllowTcpForwarding local
+    GatewayPorts no
+    X11Forwarding no
+    PermitTunnel no
+    UsePAM no
+    PidFile /run/sshd.pid
+    LogLevel VERBOSE

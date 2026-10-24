@@ -1,0 +1,37 @@
+# Blackbox probes for the hosts in inventory/hosts.yaml.
+# Replace the address with the one in the inventory; do not invent a second list.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: lab-http
+  labels:
+    app.kubernetes.io/name: blackbox
+spec:
+  jobName: lab-http
+  interval: 60s
+  module: http_2xx
+  prober:
+    url: blackbox-exporter:9115
+    path: /probe
+  targets:
+    staticConfig:
+      static:
+        - http://192.168.1.240:8080/healthz
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: lab-icmp
+  labels:
+    app.kubernetes.io/name: blackbox
+spec:
+  jobName: lab-icmp
+  interval: 60s
+  module: icmp
+  prober:
+    url: blackbox-exporter:9115
+    path: /probe
+  targets:
+    staticConfig:
+      static:
+        - 192.168.1.240

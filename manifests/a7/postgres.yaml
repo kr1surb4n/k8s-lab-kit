@@ -1,0 +1,103 @@
+# A7 storage layer: PostgreSQL with a PersistentVolumeClaim.
+#
+# Bites:
+#   - storageClassName "standard" is minikube's default; k3s uses local-path
+#   - the password is a demo value; a real one belongs in a Secret created
+#     outside Git, never in this file
+#   - replicas: 1 on purpose: PostgreSQL needs a single writer here
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-credentials
+  labels:
+    app.kubernetes.io/name: postgres
+type: Opaque
+stringData:
+  POSTGRES_DB: lab
+  POSTGRES_USER: lab
+  POSTGRES_PASSWORD: "lab-demo-password"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  labels:
+    app.kubernetes.io/name: postgres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+spec:
+  replicas: 1
+  strategy:
+    # The old pod must release the claim before the new one starts.
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - name: pg
+              containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          # Keep the data directory on the cluster volume, not in the pod.
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "lab", "-d", "lab"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "lab", "-d", "lab"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: pg
+      port: 5432
+      targetPort: pg

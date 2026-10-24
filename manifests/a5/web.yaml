@@ -1,0 +1,143 @@
+# A5 — nginx basic auth backed by a Secret.
+#
+# Demo only: user `lab`, password `labpass`, apr1 hash.
+# The same file created the proper way:
+#   htpasswd -c .htpasswd lab          (or: openssl passwd -apr1 labpass)
+#   kubectl create secret generic web-basic-auth --from-file=.htpasswd -n k8s-lab
+#
+# Bites:
+#   - base64 is not encryption; this object is readable by anyone who may
+#     `get secrets` in the namespace
+#   - mounting it as a file is safer than env: fewer leaks, mode 0400
+#   - the file must keep the name `.htpasswd`, or nginx will not find it
+apiVersion: v1
+kind: Secret
+metadata:
+  name: web-basic-auth
+  labels:
+    app.kubernetes.io/name: web
+type: Opaque
+stringData:
+  .htpasswd: "lab:$apr1$TQPga4yh$OknN1blY7zjLOHIM3PpUG0"
+---
+# The nginx server block and the page, in one ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-auth-config
+  labels:
+    app.kubernetes.io/name: web
+data:
+  default.conf: |
+    server {
+      listen 80;
+      server_name _;
+      root /usr/share/nginx/html;
+      index index.html;
+
+      location / {
+        auth_basic "k8s lab";
+        auth_basic_user_file /etc/nginx/auth/.htpasswd;
+        try_files $uri $uri/ =404;
+      }
+
+      location = /healthz {
+        auth_basic off;
+        return 200 "ok\n";
+      }
+    }
+---
+# The page has its own ConfigMap, so both volumes are directory mounts:
+# no subPath, so edits still propagate.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-page
+  labels:
+    app.kubernetes.io/name: web
+data:
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+      <head><meta charset="utf-8"><title>k8s lab — A5</title></head>
+      <body style="font-family:system-ui;margin:3rem;background:#0f172a;color:#e2e8f0">
+        <h1>k8s lab — A5</h1>
+        <p>You are authenticated. The password lives in a Secret mounted as a file.</p>
+      </body>
+    </html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app.kubernetes.io/name: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            # Replacing conf.d is fine: the image only ships default.conf.
+            - name: auth-config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+            # The Secret arrives as /etc/nginx/auth/.htpasswd; the mode must let
+            # the nginx worker read it (nginx reads as its own user, not as root).
+            - name: auth-secret
+              mountPath: /etc/nginx/auth
+              readOnly: true
+            # The page arrives as its own ConfigMap: a directory mount, so an
+            # edit propagates (a subPath mount would not).
+            - name: web-page
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: auth-config
+          configMap:
+            name: web-auth-config
+        - name: web-page
+          configMap:
+            name: web-page
+        - name: auth-secret
+          secret:
+            secretName: web-basic-auth
+            # nginx reads the file as its own user (www-data/nginx), not as root.
+            defaultMode: 0644
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels:
+    app.kubernetes.io/name: web
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bastion
+  namespace: bastion
+  labels:
+    app.kubernetes.io/name: bastion
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bastion
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bastion
+    spec:
+      serviceAccountName: bastion
+      containers:
+        - name: sshd
+          image: k8s-lab/bastion:1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: ssh
+              containerPort: 22
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {memory: 96Mi}
+          readinessProbe:
+            tcpSocket:
+              port: 22
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          volumeMounts:
+            - name: sshd-config
+              mountPath: /etc/ssh/sshd_config.d/10-bastion.conf
+              subPath: sshd_config
+              readOnly: true
+            - name: authorized-keys
+              mountPath: /etc/ssh/authorized_keys
+              readOnly: true
+            - name: host-keys
+              mountPath: /etc/ssh/keys
+      volumes:
+        - name: sshd-config
+          configMap:
+            name: bastion-sshd
+        - name: authorized-keys
+          secret:
+            secretName: bastion-authorized-keys
+            defaultMode: 0400
+        # Host keys are generated at start; committing them would be a leak.
+        - name: host-keys
+          emptyDir: {}

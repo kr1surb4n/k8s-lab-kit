@@ -1,0 +1,28 @@
+# Client-side SSH config. Copy the relevant block into ~/.ssh/config.
+#
+#   ssh lab-bastion          # a shell on the bastion
+#   ssh lab-node             # a shell on the lab host, through the bastion
+#   ssh -L 6443:127.0.0.1:6443 lab-bastion   # then use a kubeconfig with 127.0.0.1:6443
+
+Host lab-bastion
+    HostName bastion.example.com
+    User labjump
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+    ForwardAgent no
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+Host lab-node
+    HostName 192.168.1.240
+    User kris
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+    ProxyJump lab-bastion
+
+# Kubernetes API through the bastion, without exposing 6443 to the internet.
+Host lab-api
+    HostName 127.0.0.1
+    Port 6443
+    User kris
+    ProxyJump lab-bastion

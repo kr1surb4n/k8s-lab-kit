@@ -1,0 +1,18 @@
+echo "k8s: up a6 (3 replicas, LoadBalancer)"; klab up a6
+echo "k8s: up a1 with the host mount"; klab up a1 --mount
+echo "k8s: status"; klab status a6
+echo "k8s: pods wide"; k8s_pods
+echo "k8s: events (last 20)"; k8s_events
+echo "k8s: logs, follow"; k8s_logs
+echo "k8s: shell in the app"; k8s_shell
+echo "k8s: expose on the LAN"; klab tunnel --background
+echo "k8s: LAN url"; klab url
+echo "k8s: scale +1"; klab scale --delta 1
+echo "k8s: scale -1"; klab scale --delta -1
+echo "k8s: update image"; klab rollout image nginx:1.28-alpine
+echo "k8s: rollback"; klab rollout undo
+echo "k8s: verify"; klab verify a6
+echo "k8s: doctor"; klab doctor
+echo "k8s: remove the scenario"; klab down a6
+echo "k8s: remove the namespace"; klab down all --yes
+echo "k8s: curl inside the cluster"; k8s_curl http://web.k8s-lab.svc.cluster.local

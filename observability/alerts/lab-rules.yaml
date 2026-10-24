@@ -1,0 +1,62 @@
+# Four symptom alerts for the lab. Causes change; symptoms do not.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: k8s-lab-alerts
+  labels:
+    app.kubernetes.io/name: k8s-lab-alerts
+spec:
+  groups:
+    - name: lab.symptoms
+      rules:
+        - alert: PodCrashLooping
+          expr: increase(kube_pod_container_status_restarts_total{namespace="k8s-lab"}[10m]) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "pod {{ $labels.pod }} is restarting"
+            description: "More than 3 restarts in 10 minutes. Check logs --previous."
+            runbook: "docs/runbooks.md#t1--troubleshooting-drills"
+
+        - alert: PodNotReady
+          expr: kube_pod_status_phase{namespace="k8s-lab", phase=~"Pending|Unknown"} == 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "pod {{ $labels.pod }} is {{ $labels.phase }}"
+            description: "Scheduling, image pull or volume problem. Check describe."
+
+        - alert: DeploymentReplicasMismatch
+          expr: |
+            kube_deployment_spec_replicas{namespace="k8s-lab"} > 0
+            and
+            kube_deployment_spec_replicas{namespace="k8s-lab"}
+            !=
+            kube_deployment_status_replicas_available{namespace="k8s-lab"}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "deployment {{ $labels.deployment }} is not fully available"
+            description: "Rollout stuck or probes failing. Run kubectl rollout status."
+
+        - alert: TargetDown
+          expr: up == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "scrape target {{ $labels.job }} is down"
+            description: "The exporter or the host it runs on is unreachable."
+
+        - alert: NodeFilesystemFilling
+          expr: |
+            node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.15
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "root filesystem is below 15% free on {{ $labels.instance }}"
+            description: "Prune images or PVCs before the kubelet evicts pods."

@@ -1,0 +1,22 @@
+# One record per host that the lab is allowed to watch.
+# No dashboard without a record here, and no secrets in this file.
+version: 1
+site: home-lab
+hosts:
+  - name: k8s-host
+    address: 192.168.1.240
+    role: k8s-node
+    owner: kris
+    os: debian-13
+    labels:
+      site: home
+      env: lab
+    expected_ports: [22, 6443, 8080, 8443]
+    checks:
+      - type: icmp
+      - type: tcp
+        port: 22
+      - type: http
+        url: http://192.168.1.240:8080/healthz
+        expect_status: 200
+    notes: "minikube host; NodePorts are not reachable from the LAN with the docker driver"

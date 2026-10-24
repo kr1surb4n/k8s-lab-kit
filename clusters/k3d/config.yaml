@@ -1,0 +1,28 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: k8s-lab
+servers: 1
+agents: 1
+# The load balancer is the only thing that binds host ports, which is exactly
+# what the LAN exercise (A4) needs and minikube's docker driver cannot do.
+ports:
+  - port: 8080:80
+    nodeFilters:
+      - loadbalancer
+  - port: 8443:443
+    nodeFilters:
+      - loadbalancer
+options:
+  k3d:
+    wait: true
+    timeout: "180s"
+  k3s:
+    extraArgs:
+      # Traefik is disabled so the lab can use ingress-nginx, like the runbooks.
+      - arg: --disable=traefik
+        nodeFilters:
+          - server:*
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true

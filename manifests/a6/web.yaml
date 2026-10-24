@@ -1,0 +1,77 @@
+# A6 — three replicas behind a LoadBalancer, ready for the lifecycle drills.
+#
+# Operations this file supports (driven by scripts/):
+#   up      kubectl apply -f manifests/a6/
+#   down    kubectl delete -f manifests/a6/
+#   +1/-1   kubectl scale deploy/web --replicas=N
+#   update  kubectl set image deploy/web web=nginx:<newer>
+#   undo    kubectl rollout undo deploy/web
+#
+# Bites:
+#   - LoadBalancer stays <pending> on minikube until `minikube tunnel`
+#   - without the readiness probe the rolling update serves 502s
+#   - the selector is immutable; rename it only by recreating the Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app.kubernetes.io/name: web
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  strategy:
+    type: RollingUpdate
+    # Never drop below 3 ready pods: that is what keeps the update invisible.
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels:
+    app.kubernetes.io/name: web
+spec:
+  # On a real cloud this asks for an external IP. On minikube it stays
+  # <pending>; use scripts/lab-tunnel.sh for LAN access.
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

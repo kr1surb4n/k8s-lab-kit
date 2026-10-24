@@ -1,0 +1,35 @@
+# OpenTelemetry collector: receive OTLP from the lab, export to Tempo.
+# Chart: open-telemetry/opentelemetry-collector
+mode: deployment
+replicaCount: 1
+
+resources:
+  requests: {cpu: 50m, memory: 96Mi}
+  limits: {memory: 250Mi}
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+  processors:
+    memory_limiter:
+      check_interval: 1s
+      limit_mib: 200
+    batch: {}
+  exporters:
+    otlp:
+      endpoint: tempo.observability.svc.cluster.local:4317
+      tls:
+        insecure: true
+    debug:
+      verbosity: basic
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, batch]
+        exporters: [otlp]

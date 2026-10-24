@@ -1,0 +1,267 @@
+#!/usr/bin/env bash
+# Fake kubectl, for offline demonstration only.
+#
+# It answers the handful of calls the lab scripts make, keeps a tiny state file
+# so `scale` is visible in the next `status`, and never touches a cluster.
+#
+# It exists so that docs/example-runs.md can show the script flow before a real
+# cluster is installed. It is NOT a test double for Kubernetes behaviour.
+#
+#   PATH="$PWD/scripts/demo:$PATH" scripts/lab-status.sh a6
+set -uo pipefail
+
+state=${FAKE_KUBECTL_STATE:-${TMPDIR:-/tmp}/k8s-lab-fake-state}
+log_file=${FAKE_KUBECTL_LOG:-${TMPDIR:-/tmp}/k8s-lab-fake.log}
+scenario="a6"
+replicas=3
+image="nginx:1.27-alpine"
+have_state=0
+
+# Load the remembered state, if any.
+if [[ -f $state ]]; then
+  have_state=1
+  # shellcheck disable=SC1090
+  source "$state"
+fi
+
+# Keep a record of every call, for the curious.
+printf 'fake-kubectl %s\n' "$*" >>"$log_file"
+
+# Remember the state between calls.
+save_state() {
+  {
+    printf 'scenario=%q\n' "$scenario"
+    printf 'replicas=%q\n' "$replicas"
+    printf 'image=%q\n' "$image"
+  } >"$state"
+}
+
+# Print one known object, or fail like kubectl does.
+known_object() {
+  local kind=$1 name=$2
+  case "$kind" in
+    configmap)
+      [[ $name == web-index && $scenario == a2 ]] && return 0
+      [[ $name == web-config && $scenario == a3 ]] && return 0
+      [[ $name == web-auth-config && $scenario == a5 ]] && return 0
+      [[ $name == web-nginx-conf && $scenario == a7 ]] && return 0
+      [[ $name == kube-root-ca.crt ]] && return 0
+      ;;
+    secret)
+      [[ $name == web-basic-auth && $scenario == a5 ]] && return 0
+      [[ $name == postgres-credentials && $scenario == a7 ]] && return 0
+      ;;
+    service)
+      [[ $name == web ]] && return 0
+      [[ $name == postgres && $scenario == a7 ]] && return 0
+      ;;
+    deployment)
+      [[ $name == web ]] && return 0
+      [[ $name == postgres && $scenario == a7 ]] && return 0
+      ;;
+    pvc)
+      [[ $name == postgres-data && $scenario == a7 ]] && return 0
+      ;;
+    endpoints)
+      [[ $name == web ]] && return 0
+      ;;
+    namespace)
+      [[ $have_state == 1 ]] && return 0
+      ;;
+  esac
+  return 1
+}
+
+# Print a table header and one line per object, enough to look real.
+print_table() {
+  local kind=$1
+  case "$kind" in
+    pods)
+      printf 'NAME                    READY   STATUS    RESTARTS   AGE   IP           NODE\n'
+      local i
+      for ((i = 1; i <= replicas; i++)); do
+        printf 'web-6d8778f-%-3s        1/1     Running   0          5m    10.244.0.%s   minikube\n' "$i" "$((4 + i))"
+      done
+      ;;
+    deployment)
+      printf 'NAME   READY   UP-TO-DATE   AVAILABLE   AGE\n'
+      printf 'web    %s/%s     %s            %s           5m\n' "$replicas" "$replicas" "$replicas" "$replicas"
+      ;;
+    service)
+      printf 'NAME   TYPE           CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE\n'
+      printf 'web    LoadBalancer   10.96.0.10    <pending>     80:30080/TCP   5m\n'
+      [[ $scenario == a7 ]] && printf 'postgres   ClusterIP   10.96.0.11    <none>        5432/TCP       5m\n'
+      ;;
+    endpoints)
+      printf 'NAME   ENDPOINTS                                AGE\n'
+      printf 'web    10.244.0.5:80,10.244.0.6:80,10.244.0.7:80   5m\n'
+      ;;
+    pvc)
+      if [[ $scenario != a7 ]]; then
+        printf 'No resources found in %s namespace.\n' "${LAB_NAMESPACE:-k8s-lab}"
+        return 0
+      fi
+      printf 'NAME            STATUS   VOLUME         CAPACITY   ACCESS MODES   STORAGECLASS   AGE\n'
+      printf 'postgres-data   Bound    pvc-1a2b3c4d   1Gi        RWO            standard       5m\n'
+      ;;
+    ingress)
+      printf 'No resources found in %s namespace.\n' "${LAB_NAMESPACE:-k8s-lab}"
+      ;;
+    configmap)
+      printf 'NAME               DATA   AGE\n'
+      printf 'kube-root-ca.crt   1      10m\n'
+      [[ $scenario == a2 ]] && printf 'web-index          2      5m\n'
+      [[ $scenario == a3 ]] && printf 'web-config         3      5m\n'
+      [[ $scenario == a5 ]] && printf 'web-auth-config    2      5m\n'
+      [[ $scenario == a7 ]] && printf 'web-nginx-conf     1      5m\n'
+      ;;
+    secret)
+      if [[ $scenario != a5 && $scenario != a7 ]]; then
+        printf 'No resources found in %s namespace.\n' "${LAB_NAMESPACE:-k8s-lab}"
+        return 0
+      fi
+      printf 'NAME                  TYPE     DATA   AGE\n'
+      [[ $scenario == a5 ]] && printf 'web-basic-auth        Opaque   1      5m\n'
+      [[ $scenario == a7 ]] && printf 'postgres-credentials  Opaque   3      5m\n'
+      ;;
+    events)
+      printf 'LAST SEEN   TYPE     REASON    OBJECT       MESSAGE\n'
+      printf '2m          Normal   Pulled    pod/web-1    Container image already present\n'
+      printf '2m          Normal   Created   pod/web-1    Created container web\n'
+      printf '2m          Normal   Started   pod/web-1    Started container web\n'
+      ;;
+    *)
+      printf 'NAME   AGE\n'
+      ;;
+  esac
+  return 0
+}
+
+verb=${1:-}
+[[ -n $verb ]] || { printf 'fake-kubectl: missing verb\n' >&2; exit 1; }
+shift
+
+case "$verb" in
+  version)
+    printf 'Client Version: v1.31.0\nKustomize Version: v5.4.2\n'
+    ;;
+  cluster-info)
+    printf 'Kubernetes control plane is running at https://127.0.0.1:6443\n'
+    ;;
+  create)
+    # create namespace NAME
+    printf '%s/%s created\n' "$1" "$2"
+    ;;
+  apply)
+    # apply -f <path>: guess the scenario from the folder and the replica count
+    folder=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -f) folder=$2; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    scenario=$(basename "$folder")
+    if [[ $scenario == a6 ]]; then replicas=3; else replicas=1; fi
+    # A7 also creates the database deployment.
+    save_state
+    printf 'deployment.apps/web created\nservice/web created\n'
+    printf '(applied %s)\n' "$folder"
+    ;;
+  delete)
+    if [[ ${1:-} == namespace ]]; then
+      printf 'namespace "%s" deleted\n' "${2:-k8s-lab}"
+    else
+      printf 'deployment.apps "web" deleted\nservice "web" deleted\n'
+    fi
+    ;;
+  scale)
+    target=""
+    for arg in "$@"; do
+      [[ $arg == --replicas=* ]] && target=${arg#--replicas=}
+    done
+    replicas=${target:-$replicas}
+    save_state
+    printf 'deployment.apps/web scaled\n'
+    ;;
+  set)
+    # set image deployment/web web=IMAGE
+    for arg in "$@"; do
+      [[ $arg == *=* ]] && image=${arg#*=}
+    done
+    save_state
+    printf 'deployment.apps/web image updated\n'
+    ;;
+  rollout)
+    case "${1:-}" in
+      status) printf 'deployment "web" successfully rolled out\n' ;;
+      history)
+        printf 'REVISION  CHANGE-CAUSE\n1         <none>\n2         <none>\n'
+        ;;
+      undo) printf 'deployment.apps/web rolled back\n' ;;
+      restart) printf 'deployment.apps/web restarted\n' ;;
+      *) printf 'deployment.apps/web unhandled rollout %s\n' "${1:-}" ;;
+    esac
+    ;;
+  get)
+    jsonpath=""
+    positional=()
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -n | --namespace) shift 2 ;;
+        -o)
+          [[ ${2:-} == jsonpath=* ]] && jsonpath=${2#jsonpath=}
+          shift 2
+          ;;
+        --sort-by=*) shift ;;
+        -*) shift ;;
+        *)
+          positional+=("$1")
+          shift
+          ;;
+      esac
+    done
+    kind=${positional[0]:-}
+    name=${positional[1]:-}
+
+    # A named object that does not exist must fail, like the real client.
+    if [[ -n $name ]]; then
+      known_object "$kind" "$name" || { printf 'Error from server (NotFound): %s "%s" not found\n' "$kind" "$name" >&2; exit 1; }
+    fi
+
+    if [[ -n $jsonpath ]]; then
+      case "$jsonpath" in
+        *spec.replicas*) printf '%s' "$replicas" ;;
+        *status.readyReplicas* | *status.availableReplicas*) printf '%s' "$replicas" ;;
+        *spec.type*) printf 'LoadBalancer' ;;
+        *status.phase*) printf 'Bound' ;;
+        *metadata.name*) printf '%s' "$name" ;;
+        *subsets*addresses*) printf '10.244.0.5' ;;
+        *hostPath.path*) printf '%s' "${LAB_MOUNT:-/mnt/lab}/site" ;;
+        *) printf '' ;;
+      esac
+      exit 0
+    fi
+
+    print_table "$kind"
+    ;;
+  exec)
+    printf 'PATH=/usr/local/sbin:/usr/local/bin\nHOSTNAME=web-6d8778f-1\nAPP_ENV=from-pod-spec\nLOG_LEVEL=debug\n'
+    ;;
+  logs)
+    printf '127.0.0.1 - - "GET / HTTP/1.1" 200 615 "-" "curl/8.5.0"\n'
+    ;;
+  describe)
+    printf 'Name:         web-6d8778f-1\nNamespace:    k8s-lab\nStatus:       Running\nEvents:\n  Normal  Started  Started container web\n'
+    ;;
+  port-forward)
+    printf 'Forwarding from 0.0.0.0:8080 -> 80\n'
+    ;;
+  wait)
+    printf 'deployment.apps/web condition met\n'
+    ;;
+  *)
+    printf 'fake-kubectl: unhandled verb %s\n' "$verb" >&2
+    exit 1
+    ;;
+esac

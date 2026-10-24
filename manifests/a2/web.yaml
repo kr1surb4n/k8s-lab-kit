@@ -1,0 +1,88 @@
+# A2 — the page comes from a ConfigMap, not from a host folder.
+#
+# Every key becomes a file in the mounted directory. Mounting the whole
+# directory (not subPath) is what makes later edits show up without a restart.
+# Text only: a ConfigMap is capped at 1 MiB and must be UTF-8.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-index
+  labels:
+    app.kubernetes.io/name: web
+data:
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <title>k8s lab — A2</title>
+        <link rel="stylesheet" href="style.css">
+      </head>
+      <body>
+        <h1>k8s lab — A2</h1>
+        <p>This page is a ConfigMap key mounted as <code>index.html</code>.</p>
+        <p>Edit the ConfigMap and wait about a minute. No pod restart.</p>
+      </body>
+    </html>
+  style.css: |
+    body { font-family: system-ui, sans-serif; margin: 3rem; background: #0f172a; color: #e2e8f0; }
+    code { background: #1e293b; padding: .15rem .4rem; border-radius: .25rem; }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app.kubernetes.io/name: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: web
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          # Mounting the directory hides the image's default index.html and
+          # replaces the whole web root with the ConfigMap keys.
+          volumeMounts:
+            - name: content
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: content
+          configMap:
+            name: web-index
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels:
+    app.kubernetes.io/name: web
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
