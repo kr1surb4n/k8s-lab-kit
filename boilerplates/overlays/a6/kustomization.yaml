@@ -1,0 +1,46 @@
+# A6 overlay — 3 replicas, LoadBalancer, rolling update with maxUnavailable=0.
+#
+# Uses boilerplates/base and overrides the necessary fields.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namePrefix: web-
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: web
+    includeSelectors: true
+    includeTemplates: true
+
+namespace: k8s-lab
+
+patches:
+  # Deployment: 3 replicas, RollingUpdate with maxUnavailable=0
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/strategy/rollingUpdate/maxUnavailable
+        value: 0
+    target:
+      kind: Deployment
+
+  # Service: LoadBalancer type
+  - patch: |-
+      - op: replace
+        path: /spec/type
+        value: LoadBalancer
+    target:
+      kind: Service
+
+  # Container image
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: nginx:1.27-alpine
+    target:
+      kind: Deployment

@@ -170,15 +170,15 @@ Derived from `kubernetes_podsumowanie.md`; see `04-analysis-podsumowanie.md`.
 These start only after the core lab is closed. Order matters; each phase assumes
 the previous one left a working boilerplate and a transcript.
 
-## Phase 12 — Hardware gate and boilerplates (S–M)
+## Phase 12 — Hardware gate and boilerplates (S–M) — **DONE**
 
-- [ ] Run `make doctor` on every machine that will host the lab; record the tier.
-- [ ] Add the missing CLI tools the doctor lists (`kubectl`, `minikube`, `helm`, `sqlite3`, `htpasswd`).
-- [ ] Finish `paczki/k8s/`: cronjob, statefulset, job, networkpolicy, pdb, rbac, hpa.
-- [ ] Create `boilerplates/base/` (deployment + service + probes + resources + kustomization).
-- [ ] Port A6 onto the base to prove the boilerplate is enough.
+- [x] Run `make doctor` on every machine that will host the lab; record the tier.
+- [x] Add the missing CLI tools the doctor lists (`kubectl`, `minikube`, `helm`, `sqlite3`, `htpasswd`).
+- [x] Finish `paczki/k8s/`: cronjob, statefulset, job, networkpolicy, pdb, rbac, hpa.
+- [x] Create `boilerplates/base/` (deployment + service + probes + resources + kustomization).
+- [x] Port A6 onto the base to prove the boilerplate is enough.
 
-**Verify:** a new folder reaches a verified deployment using only the base plus one overlay.
+**Verify:** a new folder reaches a verified deployment using only the base plus one overlay. (Tested: `kubectl kustomize boilerplates/overlays/a6 | kubectl apply -f -` → 3 replicas Ready, LoadBalancer service created, nginx responds.)
 
 ## Phase 13 — Recovery drills (M)
 

@@ -1,0 +1,53 @@
+# Base Deployment — stateless workload with probes and resource requests.
+#
+# Override via kustomize patches or edit directly.
+# Default values (overridden by overlay): name=base-app, image=nginx:1.27-alpine, replicas=1, port=80
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: base-app
+  labels:
+    app.kubernetes.io/name: base-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: base-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: base-app
+    spec:
+      containers:
+        - name: base-app
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            - name: APP_ENV
+              value: "lab"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi

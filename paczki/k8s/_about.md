@@ -44,5 +44,12 @@ PACZEK_FILLINGS="$PWD/paczki" bash -c 'source ~/.coat/modules/spells.sh; paczek 
 | `ingress.yaml.tpl` | Ingress | HTTP routing by host/path |
 | `values.yaml.tpl` | Helm values | override a chart |
 | `kustomization.yaml.tpl` | Kustomization | group manifests, set namespace |
+| `cronjob.yaml.tpl` | CronJob | recurring or one-off batch work |
+| `statefulset.yaml.tpl` | StatefulSet | stable identity, ordered rollout, PVC per pod |
+| `job.yaml.tpl` | Job | run-to-completion (migration, init) |
+| `networkpolicy.yaml.tpl` | NetworkPolicy | default-deny, explicit allow |
+| `pdb.yaml.tpl` | PodDisruptionBudget | limit voluntary disruptions |
+| `rbac.yaml.tpl` | Role + RoleBinding | least-privilege namespace RBAC |
+| `hpa.yaml.tpl` | HorizontalPodAutoscaler | scale on CPU / custom metrics |
 
 `_about.md` is this file; `paczek k8s` lists it too, ignore it.
