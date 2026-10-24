@@ -1,0 +1,81 @@
+# Generated / temporary
+*.log
+*.tmp
+*.pid
+k8s-lab-fake-state*
+k8s-lab-mount.*
+k8s-lab-forward-*.pid
+k8s-lab-forward-*.log
+
+# Build artifacts
+*.tar.gz
+*.zip
+dist/
+build/
+*.o
+*.so
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Local overrides
+.env
+.env.local
+*.local
+
+# Kubernetes / minikube generated
+.minikube/
+.kube/config-minikube
+kubeconfig*
+
+# Tool caches
+~/.cache/
+~/.local/share/minikube/
+~/.minikube/
+
+# Test output
+coverage/
+.htmlcov/
+
+# Go
+vendor/
+*.exe
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+build/
+.next/
+*.tsbuildinfo
+
+# Rust
+target/
+Cargo.lock
+
+# Helm
+*.tgz
+charts/
+.lock
+
+# Secrets (never commit)
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+secrets/
+*.secret.yaml
