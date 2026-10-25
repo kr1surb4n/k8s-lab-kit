@@ -1,0 +1,43 @@
+# Local (minikube) overlay: no GPU device plugin, small footprint.
+# The mockup is CPU-only; the base manifests describe the full GPU deployment.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: k8s-lab
+
+resources:
+  - ../../k8s
+
+patches:
+  # One replica, no GPU scheduling constraints, small requests.
+  - target:
+      kind: Deployment
+      name: rag-api
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: remove
+        path: /spec/template/spec/affinity
+      - op: remove
+        path: /spec/template/spec/tolerations
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            memory: 384Mi
+
+  # Keep the HPA from asking for replicas the laptop cannot host.
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: rag-api-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 1

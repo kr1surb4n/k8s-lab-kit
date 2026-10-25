@@ -1,9 +1,10 @@
-# RAG API overlay — applies boilerplates/base with RAG-specific config.
+# RAG API overlay — the standalone RAG manifests plus shared labels.
+# The deployment and service below are complete, so boilerplates/base is not
+# included (doing both would create a second, conflicting Deployment).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - ../../base
   - deployment.yaml
   - service.yaml
   - configmap.yaml
