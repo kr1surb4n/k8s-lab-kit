@@ -1,29 +1,28 @@
 # Resume — where this work stands
 
-Written at the end of the session that ran the core lab. Read this first when
-coming back; it is deliberately short and points at the details.
+Read this first when coming back. It is deliberately short and points at the
+details.
 
 - **Folder:** `/home/kris/00___Castle/07__WorkShops/k8s`
 - **Date:** 2026-10-25
-- **State:** **core lab (A1–A7) executed on a real minikube cluster**
-- **Offline gate:** `make check` green, `make test` 36/36
-- **Files:** 70+ (5 sources/inputs, 6 analyses, 4 docs, 6 manifests, 8 templates,
-  12 scripts, 1 test suite, 4 coat files, 1 Makefile, 1 README,
-  observability/bastion/cluster scaffolds)
+- **State:** **Phases 0–16 done; Phase 17 (Graph RAG) and Phase 18 (cloud) open**
+- **Git:** repository on `main`; conventional commits, one change per commit
+- **Offline gate:** `make test` → **36 passed, 0 failed**
+- **Cluster:** minikube running (docker driver); `observability` namespace healthy
 
 ## One paragraph
 
 The lab is derived from three sources: the seven nginx exercises in
 `k8_zadanie1_koper_prompt.md`, the 11-page PDF, and the 20-line outline the PDF
-cites (`kubernetes_podsumowanie.md`). The analysis found that the outline covers
-about half of the exercise, that the PDF adds several broken snippets, and that
-this machine can host the whole core lab plus a small observability stack. The
-kit is built in five layers (runbooks → manifests → paczki → scripts → coat), the
-offline tests pass, and the core lab has now been executed for real:
-A1 (host mount + live edit), A2 (ConfigMap + live edit), A3 (env precedence),
-A6 (3 replicas + rolling), A5 (basic auth Secret), A7 (nginx + PHP-FPM +
-PostgreSQL + SQLite with host live insert). All transcripts captured in
-`docs/example-runs.md`, rows closed in `docs/coverage-matrix.md`.
+cites (`kubernetes_podsumowanie.md`). The core lab A1–A7 ran on a real minikube
+cluster: A1 (host mount + live edit), A2 (ConfigMap + live edit), A3 (env
+precedence), A4 (LAN access from a second machine), A5 (basic-auth Secret),
+A6 (3 replicas + rolling update), A7 (nginx + PHP-FPM + PostgreSQL + SQLite).
+The expansion tracks followed: boilerplates and paczki (12), recovery drills (13),
+eight stack templates (14), the metrics/logs/traces stack (15), and the RAG
+pattern with a recorded evaluation baseline (16). Graph RAG (17) and the cloud
+free-tier experiment (18) are the remaining phases; see
+`analysis/07-what-to-do.md`.
 
 ## What is done and verified
 
@@ -33,33 +32,35 @@ PostgreSQL + SQLite with host live insert). All transcripts captured in
 | Hardware profile and tiers | `analysis/05`, `make doctor` |
 | Expanded scope, seven tracks | `analysis/06` |
 | Ordered work list, phases 0–18 | `analysis/02-todo.md` |
-| Research list with 22 testable questions | `analysis/03-research.md` |
+| Remaining-work description | `analysis/07-what-to-do.md` |
+| Core lab A1–A7 on a real cluster | `docs/example-runs.md`, `docs/coverage-matrix.md` |
 | Runbooks A1–A7 + D1/H1/N1/T1 | `docs/runbooks.md` |
-| Traceability against the outline | `docs/coverage-matrix.md` (A1–A3, A5–A7 = covered) |
-| Manifests for a1, a2, a3, a5, a6, a7 | `manifests/` (22+ YAML documents parse) |
+| Manifests for a1, a2, a3, a5, a6, a7 | `manifests/` |
 | Eight paczki templates | `paczki/k8s/` |
+| Boilerplate base + 8 stack overlays | `boilerplates/` |
+| Four recovery drills (inject/recover) | `recovery/`, `scripts/lab-drill.sh` |
 | Scripts: up, down, status, scale, rollout, tunnel, verify, doctor, env, mkpasswd, cluster-create, cluster-delete | `scripts/` |
 | Fake kubectl for offline transcripts | `scripts/demo/kubectl` |
 | Offline test suite | `tests/run.sh` → 36 passed |
 | Coat module, spells, installer | `coat/` (installer tested with `--dry-run`) |
-| README, example runs (real A1, simulated rest) | `README.md`, `docs/example-runs.md` |
-| Observability scaffold (profiles, values, alerts, probes) | `observability/` |
+| Observability full stack (Prometheus, Grafana, Loki, Tempo, OTel) | `observability/`, running in `observability` namespace |
+| RAG pattern + eval baseline | `ai/patterns/rag/`, `ai/patterns/rag/eval/results.json` |
 | Bastion scaffold (host + in-cluster) | `bastion/` |
 | Cluster skeletons (minikube, kind, k3d, k3s, managed) | `clusters/` |
 | Tool installer (user-space + apt fallback) | `setup/install-tools.sh` |
 
 ## What is not done
 
-1. **A4 LAN verification from a second machine** — host-side curl works
-   (`curl http://192.168.1.240:8080` returns 200), but no second machine available.
-2. **Coat is not installed.** Only `coat/install-coat.sh --dry-run` was run.
-   Nothing in `~/.coat` or `~/.coatrc` was changed.
-3. **Observability stack not installed** — scaffolded only. Install with
-   `make obs PROFILE=minimal` after disk/RAM check.
-4. **Bastion not deployed** — manifests and host config exist, not applied.
-5. **The expansion tracks exist only as plans:** no stacks (phase 14), no drills
-   (phase 13), no RAG (phase 16–17), no cloud experiment (phase 18), no AI
-   pattern catalogue.
+1. **Phase 17 — Graph RAG.** Corpus, pgvector/AGE schema, ingest, hybrid +
+   2-hop retrieval, rerank, eval harness, k8s packaging. The detailed checklist
+   is `analysis/07-what-to-do.md` §3.
+2. **Phase 18 — cloud free tier.** Plan-only until an account is provided; the
+   deliverable is provider docs, Terraform validated with `terraform plan`, the
+   A6 overlay, and a teardown checklist.
+3. **Two Phase 15 boxes.** OTel instrumentation in one or two apps (trace id in
+   the log line) and one Alertmanager alert routed to an in-cluster webhook.
+4. **Coat is not installed.** Only `coat/install-coat.sh --dry-run` was run.
+5. **Bastion not deployed.** Manifests and host config exist, not applied.
 6. **`paczki/k8s` was not exercised through `paczek`.** The `fill_template`
    syntax (`{{ VAR }}`) matches Coat, but it was not run.
 
@@ -71,36 +72,39 @@ cd /home/kris/00___Castle/07__WorkShops/k8s
 # 1. confirm the kit still passes
 make test
 
-# 2. install observability (minimal profile) if disk/RAM allow
-make doctor
-make obs PROFILE=minimal
+# 2. read the current plan
+sed -n '1,120p' analysis/07-what-to-do.md
 
-# 3. deploy host bastion (if a second machine will be used)
-# sudo bastion/host/setup.sh --user labjump --key ~/.ssh/id_ed25519.pub --lan 192.168.1.0/24
+# 3. Phase 15 leftovers (cluster is already running)
+kubectl -n observability get pods
+make obs PROFILE=full   # only if the stack is missing
 
-# 4. A4 second-machine test — when a second machine is on the LAN
-# scripts/lab-up.sh a6
-# scripts/lab-tunnel.sh --background
-# on second machine: curl http://192.168.1.240:8080
+# 4. Phase 17
+make -C ai/patterns/graph-rag up
+make -C ai/patterns/graph-rag eval
 
-# 5. phase 12 (boilerplates), phase 13 (drills), phase 14 (stacks),
-#    phase 15 (observability full), phase 16–17 (AI/RAG), phase 18 (cloud)
+# 5. Phase 18 — plan only until an account exists
+terraform -chdir=cloud/oracle init -backend=false
+terraform -chdir=cloud/oracle validate
+terraform -chdir=cloud/oracle plan
 ```
 
 ## Known traps, already measured or reasoned
 
 | Trap | Where it will bite | Handle |
 |---|---|---|
-| Disk is 90% full (64.5 GiB free) | minikube 15 GiB + images + build cache | keep `--disk-size=15g`, prune after each stack, `make doctor` warns below 40 GiB |
-| 11.9 GiB RAM available now | 8 GiB cluster would swap during a PHP build | 6 GiB cluster, one stack at a time |
+| Disk is 77% full (~151 GiB free) | minikube images + model downloads | prune images after each stack, `make doctor` warns below 40 GiB |
+| ~11 GiB RAM available | 6 GiB cluster + Postgres + observability | one stack at a time |
 | `minikube mount` is a foreground process | A1/A7 pods stuck in `ContainerCreating` | `scripts/lab-up.sh a1 --mount` detaches it and records the pid |
-| `subPath` mounts never update | A2 would look broken | A2/A5 use directory mounts; this is written into the manifests and the runbook |
+| `subPath` mounts never update | A2 would look broken | A2/A5 use directory mounts; written into manifests and runbook |
 | ConfigMap is 1 MiB, UTF-8 only | images cannot live there | images go on the hostPath (A1) |
 | LoadBalancer on minikube is `<pending>` | A4 expectations | `docs/runbooks.md` A4 table; port-forward 0.0.0.0 is the answer |
 | SQLite + more than one replica | data corruption | one replica, `Recreate`, `journal_mode=DELETE` |
 | PHP-FPM runs as uid 82 | `permission denied` on `database/` | init container chowns and chmods; documented in A7 |
 | Fake `kubectl` always succeeds | false confidence | `tests/run.sh` includes failure cases; the doc labels the fake |
 | Bitnami tag drift | H1 breaks | `helm show values` before copying any snippet |
+| Ollama models are host-side | eval cannot run inside the cluster | query the host endpoint from the service, never bake models into the image |
+| pgvector + Apache AGE in one image | extension availability differs per tag | tables are primary; AGE is an optional adapter |
 
 ## Decisions to keep, and the ones to revisit
 
@@ -109,6 +113,10 @@ Keep:
 - minikube + docker driver as the default; `port-forward --address 0.0.0.0` for
   the LAN; one namespace `k8s-lab`; scripts with `--dry-run`; fake client only
   for offline docs; A7 single replica.
+- Graph RAG uses plain Postgres tables + recursive CTEs as the primary graph
+  layer; Apache AGE is optional and must not be required for evaluation.
+- Embeddings and generation run on the host GPU through Ollama; the cluster
+  service is a thin client. Real models only — no stub in the recorded path.
 - The module is sourced from `.coatrc`, **not** added to `COAT_MODULE_ORDER`, so
   a Coat update never conflicts.
 
@@ -127,14 +135,14 @@ Revisit:
 Read in this order, then run the commands:
 
 1. `resume.md` (this file) — state and next actions.
-2. `README.md` — the map of the folder.
-3. `analysis/02-todo.md` — the ordered list; find the first open checkbox.
+2. `analysis/07-what-to-do.md` — the remaining work, in order.
+3. `analysis/02-todo.md` — the full phase list.
 4. `docs/runbooks.md` — the exercise you are about to run.
 
 ```bash
 make test        # must be green before changing anything
 make doctor      # must show no FAIL line
-git status       # this folder is not a git repo; copy it out if that matters
+git status       # must be clean before you start
 ```
 
 ## Session log (what changed here)
@@ -142,23 +150,21 @@ git status       # this folder is not a git repo; copy it out if that matters
 - Created the analysis of the prompt file and the PDF, including the defect list.
 - Added and analysed `kubernetes_podsumowanie.md`; produced the coverage matrix.
 - Measured the hardware and derived the tiers; wrote the doctor and the tests.
-- Built 6 scenario manifests, 8 paczki templates, 9 scripts, a fake client, a
-  26-case offline suite, the runbooks, the example runs, the README and Coat wiring.
+- Built scenario manifests, paczki templates, scripts, a fake client, the offline
+  suite, the runbooks, the example runs, the README and Coat wiring.
 - Fixed three bugs found by the checks: an `if/fi` mismatch in `lab-tunnel.sh`,
   shellcheck warnings treated as errors, and a failing `--dry-run` without kubectl.
-- Restructured A5 from a `subPath` mount to two directory-mounted ConfigMaps.
-- Installed tools via `setup/install-tools.sh` (user-space binaries: kubectl v1.37.1,
-  minikube v1.39.0, helm v3.22.1, k3d v5.9.0, kind v0.34.0-alpha, yq v4.54.1,
-  sqlite3 3.54.1, htpasswd from .deb + mkpasswd.sh fallback).
-- Built cluster scaffolds: minikube, kind, k3d, k3s, managed; `scripts/cluster-create.sh`
-  and `cluster-delete.sh` with hardware-aware sizing from shared `recommend_sizing`.
-- Built observability scaffold: `observability/install.sh` with profiles
-  (minimal/logs/traces/full), trimmed Helm values for kube-prometheus-stack, Tempo,
-  Loki, OTel collector, alerts, probes, inventory, host compose.
-- Built bastion scaffold: host `sshd_config.d`, `setup.sh`/`audit.sh`, client SSH
-  config, in-cluster jump pod (namespace, RBAC, deployment, service, NetworkPolicy,
-  Dockerfile, entrypoint).
-- Started minikube with doctor flags (`--driver=docker --cpus=6 --memory=6144
-  --disk-size=20g`), enabled metrics-server.
-- Ran A1–A7 on the real cluster; captured transcripts in `docs/example-runs.md`,
-  closed coverage rows A1–A3, A5–A7.
+- Restructured A5 from a `subPath` mount to directory-mounted ConfigMaps.
+- Installed tools in user space (`kubectl`, `minikube`, `helm`, `k3d`, `kind`,
+  `sqlite3`, `htpasswd` plus the `mkpasswd.sh` fallback).
+- Built cluster scaffolds and hardware-aware `cluster-create.sh`/`cluster-delete.sh`.
+- Built the observability stack with profiles, values, alerts and probes.
+- Built the bastion scaffold.
+- Started minikube with the doctor flags and ran A1–A7 on the real cluster;
+  captured transcripts and closed the coverage rows.
+- Added boilerplates, paczki templates, recovery drills and eight stack overlays.
+- Deployed the full observability stack (metrics, logs, traces, Grafana).
+- Added the RAG pattern, its contracts, failure modes and evaluation harness.
+- Reverted an abandoned fake-kubectl rewrite that broke `make check`.
+- Fixed a corrupted `.gitignore` rule and moved the eval output under the pattern.
+- Recorded the Phase 16 evaluation baseline in `ai/patterns/rag/eval/results.json`.
