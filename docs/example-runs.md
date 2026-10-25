@@ -281,8 +281,15 @@ ok   lab-down removes a scenario
 ok   lab-down all removes the namespace
 ok   lab-doctor prints a recommendation
 ok   lab-doctor prints a tier
+ok   mkpasswd prints an apr1 line
+ok   cluster-create sizes minikube
+ok   cluster-create reports the result
+ok   observability plan includes Prometheus
+ok   observability picks a StorageClass
+ok   bastion setup shows the sshd drop-in
+ok   bastion setup shows the firewall step
 
-26 passed, 0 failed, 0 skipped
+36 passed, 0 failed, 0 skipped
 ```
 
 ---
