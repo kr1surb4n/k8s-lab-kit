@@ -50,3 +50,7 @@ kube-state-metrics:
   resources:
     requests: {cpu: 20m, memory: 64Mi}
     limits: {memory: 160Mi}
+
+prometheusOperator:
+  additionalArgs:
+    - --enable-probe-support=true

@@ -1,0 +1,59 @@
+# ServiceMonitor for lab-http probe - manually created since probe controller not working
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: lab-http
+  namespace: observability
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-blackbox-exporter
+  endpoints:
+    - port: http
+      interval: 60s
+      path: /probe
+      params:
+        module: [http_2xx]
+        target: ["http://192.168.1.240:8080/healthz"]
+      relabelings:
+        - sourceLabels: [__address__]
+          targetLabel: __param_target
+        - sourceLabels: [__param_target]
+          targetLabel: instance
+        - targetLabel: __address__
+          replacement: blackbox-exporter-prometheus-blackbox-exporter:9115
+  namespaceSelector:
+    matchNames:
+      - observability
+---
+# ServiceMonitor for lab-icmp probe - manually created since probe controller not working
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: lab-icmp
+  namespace: observability
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-blackbox-exporter
+  endpoints:
+    - port: http
+      interval: 60s
+      path: /probe
+      params:
+        module: [icmp]
+        target: ["192.168.1.240"]
+      relabelings:
+        - sourceLabels: [__address__]
+          targetLabel: __param_target
+        - sourceLabels: [__param_target]
+          targetLabel: instance
+        - targetLabel: __address__
+          replacement: blackbox-exporter-prometheus-blackbox-exporter:9115
+  namespaceSelector:
+    matchNames:
+      - observability
