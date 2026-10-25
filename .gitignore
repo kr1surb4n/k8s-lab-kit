@@ -78,4 +78,4 @@ charts/
 *.p12
 *.pfx
 secrets/
-*.secret.yaml
+*.secret.yamleval/results.json
