@@ -1,0 +1,82 @@
+# Java/Spring overlay — applies boilerplates/base with Java-specific config.
+# Spring Boot needs a startupProbe due to longer startup time.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: java-spring
+    includeSelectors: true
+    includeTemplates: true
+
+namespace: k8s-lab
+
+patches:
+  # Deployment: Java image, port 8080, startupProbe, env vars, JVM opts
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: boilerplate/java-spring:1.0
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 8080
+      - op: replace
+        path: /spec/template/spec/containers/0/name
+        value: java-spring
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8080
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /actuator/health/readiness
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8080
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /actuator/health/liveness
+      - op: add
+        path: /spec/template/spec/containers/0/startupProbe
+        value:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          failureThreshold: 30
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: APP_NAME
+            value: "java-spring"
+          - name: APP_ENV
+            value: "lab"
+          - name: VERSION
+            value: "1.0.0"
+          - name: JAVA_OPTS
+            value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "512Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "256Mi"
+    target:
+      kind: Deployment
+
+  # Service: target port 8080
+  - patch: |-
+      - op: replace
+        path: /spec/ports/0/targetPort
+        value: 8080
+      - op: replace
+        path: /spec/ports/0/port
+        value: 80
+    target:
+      kind: Service

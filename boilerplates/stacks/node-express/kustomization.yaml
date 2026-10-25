@@ -1,0 +1,58 @@
+# Node/Express overlay — applies boilerplates/base with Node-specific config.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: node-express
+    includeSelectors: true
+    includeTemplates: true
+
+namespace: k8s-lab
+
+patches:
+  # Deployment: Node image, port 3000, env vars
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: boilerplate/node-express:1.0
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 3000
+      - op: replace
+        path: /spec/template/spec/containers/0/name
+        value: node-express
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 3000
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 3000
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: APP_NAME
+            value: "node-express"
+          - name: APP_ENV
+            value: "lab"
+          - name: VERSION
+            value: "1.0.0"
+    target:
+      kind: Deployment
+
+  # Service: target port 3000
+  - patch: |-
+      - op: replace
+        path: /spec/ports/0/targetPort
+        value: 3000
+      - op: replace
+        path: /spec/ports/0/port
+        value: 80
+    target:
+      kind: Service

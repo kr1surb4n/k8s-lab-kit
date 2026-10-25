@@ -1,0 +1,29 @@
+# Worker + CronJob overlay — worker Deployment + CronJob + Redis Service.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - worker-deployment.yaml
+  - cronjob.yaml
+  - redis.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: worker-cronjob
+    includeSelectors: true
+    includeTemplates: true
+
+namespace: k8s-lab
+
+patches:
+  # Redis Service
+  - patch: |-
+      - op: replace
+        path: /spec/ports/0/targetPort
+        value: 6379
+      - op: replace
+        path: /spec/ports/0/port
+        value: 6379
+    target:
+      kind: Service

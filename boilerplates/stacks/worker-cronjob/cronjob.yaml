@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cron
+  labels:
+    app.kubernetes.io/name: cron
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: cron
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cron
+              image: boilerplate/worker-cron:1.0
+              command: ["python", "cron.py"]
+              env:
+                - name: APP_NAME
+                  value: "cron"
+                - name: VERSION
+                  value: "1.0.0"
+                - name: REDIS_URL
+                  value: "redis://redis:6379/0"
+                - name: QUEUE_NAME
+                  value: "jobs"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 64Mi

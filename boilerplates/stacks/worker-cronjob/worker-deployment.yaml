@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels:
+    app.kubernetes.io/name: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: worker
+    spec:
+      containers:
+        - name: worker
+          image: boilerplate/worker-cron:1.0
+          command: ["python", "worker.py"]
+          env:
+            - name: APP_NAME
+              value: "worker"
+            - name: VERSION
+              value: "1.0.0"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: QUEUE_NAME
+              value: "jobs"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import redis; r=redis.from_url('redis://redis:6379/0'); r.ping()"]
+            initialDelaySeconds: 5
+            periodSeconds: 10

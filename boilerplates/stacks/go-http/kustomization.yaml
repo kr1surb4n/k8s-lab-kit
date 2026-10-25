@@ -1,0 +1,60 @@
+# Go HTTP overlay — applies boilerplates/base with Go-specific config.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: go-http
+    includeSelectors: true
+    includeTemplates: true
+
+namespace: k8s-lab
+
+patches:
+  # Deployment: Go image, port 8080, env vars
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: boilerplate/go-http:1.0
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 8080
+      - op: replace
+        path: /spec/template/spec/containers/0/name
+        value: go-http
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8080
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8080
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: APP_NAME
+            value: "go-http"
+          - name: APP_ENV
+            value: "lab"
+          - name: VERSION
+            value: "1.0.0"
+          - name: PORT
+            value: "8080"
+    target:
+      kind: Deployment
+
+  # Service: target port 8080
+  - patch: |-
+      - op: replace
+        path: /spec/ports/0/targetPort
+        value: 8080
+      - op: replace
+        path: /spec/ports/0/port
+        value: 80
+    target:
+      kind: Service

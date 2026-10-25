@@ -1,0 +1,60 @@
+# Python/FastAPI overlay — applies boilerplates/base with Python-specific config.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: python-fastapi
+    includeSelectors: true
+    includeTemplates: true
+
+namespace: k8s-lab
+
+patches:
+  # Deployment: Python image, port 8000, env vars
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: boilerplate/python-fastapi:1.0
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 8000
+      - op: replace
+        path: /spec/template/spec/containers/0/name
+        value: python-fastapi
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8000
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8000
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: APP_NAME
+            value: "python-fastapi"
+          - name: APP_ENV
+            value: "lab"
+          - name: VERSION
+            value: "1.0.0"
+          - name: PORT
+            value: "8000"
+    target:
+      kind: Deployment
+
+  # Service: target port 8000
+  - patch: |-
+      - op: replace
+        path: /spec/ports/0/targetPort
+        value: 8000
+      - op: replace
+        path: /spec/ports/0/port
+        value: 80
+    target:
+      kind: Service

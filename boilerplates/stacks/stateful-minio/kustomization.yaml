@@ -1,0 +1,14 @@
+# Stateful MinIO — S3-compatible object storage.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - minio.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: minio
+    includeSelectors: true
+    includeTemplates: true
+
+namespace: k8s-lab
