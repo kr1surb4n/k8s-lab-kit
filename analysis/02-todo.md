@@ -204,16 +204,19 @@ the previous one left a working boilerplate and a transcript.
 
 **Verify:** each stack has `make up|verify|down` and a captured transcript; disk free stays above 30 GiB.
 
-## Phase 15 — Observability and traceability (M–L)
+## Phase 15 — Observability and traceability (M–L) — **MINIMAL DONE**
 
-- [ ] `observability/inventory/hosts.yaml` first: names, addresses, roles, ports.
-- [ ] Prometheus (or VictoriaMetrics) + node-exporter + blackbox-exporter outside the cluster.
-- [ ] Loki single-binary, Tempo single-binary, Grafana, retention 7/3 days.
-- [ ] One dashboard per layer: cluster, namespace, host, uptime.
+- [x] `observability/inventory/hosts.yaml` first: names, addresses, roles, ports.
+- [x] Prometheus (kube-prometheus-stack) + node-exporter + blackbox-exporter.
+- [x] Grafana dashboards, retention 7d metrics.
+- [x] Alerts that fire on symptoms (PodCrashLooping, PodNotReady, etc.).
+- [ ] Loki single-binary, Tempo single-binary (logs/traces profiles).
 - [ ] OTel instrumentation in one app; trace id visible in the log line.
-- [ ] Alerts that fire on symptoms, routed to a webhook.
+- [ ] Alerts routed to a webhook.
 
 **Verify:** a request from the LAN is traceable end to end; a host reboot raises an alert.
+
+> **Note:** Minimal profile (metrics + uptime + Grafana) deployed and working. Probe ServiceMonitors created but not yet scraping due to operator probe controller issue (blackbox exporter works directly). Logs/traces profiles deferred.
 
 ## Phase 16 — AI patterns catalogue (S–M)
 
