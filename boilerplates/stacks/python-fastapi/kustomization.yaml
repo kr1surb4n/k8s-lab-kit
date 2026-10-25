@@ -32,8 +32,14 @@ patches:
         path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
         value: 8000
       - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/path
+        value: /healthz
+      - op: replace
         path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
         value: 8000
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/path
+        value: /healthz
       - op: add
         path: /spec/template/spec/containers/0/env
         value:
@@ -45,6 +51,8 @@ patches:
             value: "1.0.0"
           - name: PORT
             value: "8000"
+          - name: OTLP_ENDPOINT
+            value: "http://otel-collector-opentelemetry-collector.observability:4318/v1/traces"
     target:
       kind: Deployment
 
