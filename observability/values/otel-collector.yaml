@@ -3,6 +3,16 @@
 mode: deployment
 replicaCount: 1
 
+# Disable the chart's automatic rewrite of deprecated component names
+# (e.g. otlphttp -> otlp_http) which breaks compatibility with collector 0.163.2
+rewriteDeprecatedComponentNames: false
+
+# Use the official OpenTelemetry Collector contrib image (includes OTLP receiver/exporter)
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: "0.163.2"
+  pullPolicy: IfNotPresent
+
 resources:
   requests: {cpu: 50m, memory: 96Mi}
   limits: {memory: 250Mi}
@@ -21,8 +31,9 @@ config:
       limit_mib: 200
     batch: {}
   exporters:
-    otlp:
-      endpoint: tempo.observability.svc.cluster.local:4317
+    # Use otlphttp for Tempo (supported in collector 0.163.2)
+    otlphttp:
+      endpoint: http://tempo.observability.svc.cluster.local:4318
       tls:
         insecure: true
     debug:
@@ -32,4 +43,4 @@ config:
       traces:
         receivers: [otlp]
         processors: [memory_limiter, batch]
-        exporters: [otlp]
+        exporters: [otlphttp]

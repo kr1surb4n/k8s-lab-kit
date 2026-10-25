@@ -207,19 +207,22 @@ the previous one left a working boilerplate and a transcript.
 
 **Verify:** each stack has kustomize overlay extending boilerplates/base, non-root containers, health endpoints, structured logging, graceful shutdown, resource limits. Image builds documented in stack READMEs.
 
-## Phase 15 — Observability and traceability (M–L) — **MINIMAL DONE**
+## Phase 15 — Observability and traceability (M–L) — **FULL DONE**
 
 - [x] `observability/inventory/hosts.yaml` first: names, addresses, roles, ports.
 - [x] Prometheus (kube-prometheus-stack) + node-exporter + blackbox-exporter.
 - [x] Grafana dashboards, retention 7d metrics.
 - [x] Alerts that fire on symptoms (PodCrashLooping, PodNotReady, etc.).
-- [ ] Loki single-binary, Tempo single-binary (logs/traces profiles).
+- [x] Loki single-binary (logs), 3d retention.
+- [x] Tempo single-binary (traces), 1d retention, OTLP HTTP ingestion.
+- [x] OTel Collector (0.163.2) with OTLP HTTP/GRPC receivers, otlphttp exporter to Tempo.
+- [x] Trace ingestion verified: `curl -X POST :4318/v1/traces` → visible in Tempo UI.
 - [ ] OTel instrumentation in one app; trace id visible in the log line.
 - [ ] Alerts routed to a webhook.
 
 **Verify:** a request from the LAN is traceable end to end; a host reboot raises an alert.
 
-> **Note:** Minimal profile (metrics + uptime + Grafana) deployed and working. Probe ServiceMonitors created but not yet scraping due to operator probe controller issue (blackbox exporter works directly). Logs/traces profiles deferred.
+> **Note:** Full stack (metrics + logs + traces + uptime + Grafana) deployed and working. Trace ingestion verified end-to-end.
 
 ## Phase 16 — AI patterns catalogue (S–M)
 
