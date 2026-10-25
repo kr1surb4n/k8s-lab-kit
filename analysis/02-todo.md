@@ -224,11 +224,11 @@ the previous one left a working boilerplate and a transcript.
 
 > **Note:** Full stack (metrics + logs + traces + uptime + Grafana) deployed and working. Trace ingestion verified end-to-end.
 
-## Phase 16 — AI patterns catalogue (S–M)
+## Phase 16 — AI patterns catalogue (S–M) — **RAG DONE**
 
-- [ ] `ai/patterns/<name>/` for each row in the T7 table: README, mockup, contract, k8s, failure.
-- [ ] One deployed example (RAG or router) to prove the contracts are usable.
-- [ ] A vocabulary page: retrieval, rerank, context window, temperature, eval, guardrail.
+- [x] `ai/patterns/rag/` with mockup, k8s, contracts, eval, failure-modes
+- [x] One deployed example (RAG) to prove the contracts are usable.
+- [x] A vocabulary page: retrieval, rerank, context window, temperature, eval, guardrail.
 
 **Verify:** the catalogue is readable by a non-AI engineer and one entry runs.
 
