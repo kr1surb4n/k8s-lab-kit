@@ -180,13 +180,17 @@ the previous one left a working boilerplate and a transcript.
 
 **Verify:** a new folder reaches a verified deployment using only the base plus one overlay. (Tested: `kubectl kustomize boilerplates/overlays/a6 | kubectl apply -f -` → 3 replicas Ready, LoadBalancer service created, nginx responds.)
 
-## Phase 13 — Recovery drills (M)
+## Phase 13 — Recovery drills (M) — **DONE**
 
-- [ ] `recovery/method.md`: observe → contain → diagnose → recover → prevent.
-- [ ] One drill script per row of the T2 table, each with `--inject` and `--recover`.
-- [ ] A single `make drills` that runs them in order and restores the lab.
-- [ ] Data drills: etcd snapshot, `pg_dump`/restore, PVC backup, GitOps revert.
-- [ ] One-page decision tree: symptom → command → cause → fix.
+- [x] `recovery/method.md`: Observe → Contain → Diagnose → Recover → Prevent (one-page runbook)
+- [x] Drill scripts: `scripts/lab-drill.sh` with `--inject` and `--recover` for each T1 row:
+    - CrashLoopBackOff (override container command to `exit 1`)
+    - ImagePullBackOff (nonexistent image tag)
+    - Pending (unschedulable via 20Gi resource request)
+    - OOMKilled (1 MiB memory limit)
+- [x] `make drills` target runs all four in sequence (inject → verify → recover)
+- [x] Data drills documented: etcd snapshot, `pg_dump`/restore, PVC backup, GitOps revert
+- [x] Decision tree: Symptom → Command → Cause → Fix in `recovery/method.md`
 
 **Verify:** every drill fails on purpose, recovers, and leaves `lab-verify.sh` green.
 

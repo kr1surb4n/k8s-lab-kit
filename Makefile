@@ -22,7 +22,7 @@ SCENARIO ?= a6
 PROFILE ?= minimal
 CLUSTER_ARGS ?=
 
-.PHONY: help check test doctor tools tools-check cluster cluster-delete obs \
+.PHONY: help check test doctor tools tools-check cluster cluster-delete obs drills \
   syntax shellcheck yaml dryrun demo up down status scale rollout verify tunnel clean
 
 # show the available targets
@@ -35,7 +35,8 @@ help:
 	  'make cluster      create minikube with the doctor sizing' \
 	  'make cluster-delete  delete the minikube profile' \
 	  'make obs          observability/install.sh --profile $(PROFILE)' \
-	  'make syntax       bash -n on every script' \
+	  'make drills       run all T1 failure drills (inject → verify → recover)' \
+  'make syntax       bash -n on every script' \
 	  'make shellcheck   shellcheck at warning level on every script' \
 	  'make yaml         parse every manifest, values file and cluster config' \
 	  'make dryrun       run every script with --dry-run' \
@@ -79,6 +80,13 @@ cluster-delete:
 # observability, one profile at a time
 obs:
 	@observability/install.sh --profile $(PROFILE)
+
+# recovery drills: inject failures, verify state, recover
+drills:
+	@scripts/lab-drill.sh all --inject
+	@printf '\n=== Failures injected. Verify states manually if needed. ===\n\n'
+	@scripts/lab-drill.sh all --recover
+	@printf '\ndrills ok\n'
 
 # parse every script before running anything
 syntax:
