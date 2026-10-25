@@ -2,7 +2,6 @@
 # RAG API Mockup — minimal FastAPI demo with OTel tracing.
 # Run: uvicorn main:app --host 0.0.0.0 --port 8000
 import os
-import uuid
 import time
 import logging
 import json
@@ -25,16 +24,25 @@ from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 
-# Structured JSON logging
+# Return the active trace and span ids, so logs point at the exported span.
+def current_trace_ids():
+    ctx = trace.get_current_span().get_span_context()
+    if not ctx.is_valid:
+        return None, None
+    return format(ctx.trace_id, "032x"), format(ctx.span_id, "016x")
+
+
+# Structured JSON logging, with the live trace id on every line.
 class JsonFormatter(logging.Formatter):
     def format(self, record):
+        trace_id, span_id = current_trace_ids()
         log_obj = {
             "timestamp": self.formatTime(record),
             "level": record.levelname,
             "msg": record.getMessage(),
             "logger": record.name,
-            "trace_id": getattr(record, "trace_id", None),
-            "span_id": getattr(record, "span_id", None),
+            "trace_id": trace_id or getattr(record, "trace_id", None),
+            "span_id": span_id or getattr(record, "span_id", None),
         }
         # Add extra fields
         for key, value in record.__dict__.items():
@@ -82,7 +90,8 @@ def setup_tracing():
     # Instrument FastAPI, HTTPX, logging
     FastAPIInstrumentor.instrument_app(app)
     HTTPXClientInstrumentor().instrument()
-    LoggingInstrumentor().instrument(set_logging_format=True)
+    # Keep our JSON formatter; the instrumentor only adds trace fields to records.
+    LoggingInstrumentor().instrument(set_logging_format=False)
 
 # Mock data store (in-memory for demo)
 DOCUMENTS = {
@@ -147,7 +156,6 @@ class HealthResponse(BaseModel):
 # Lifespan for startup/shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    setup_tracing()
     logger.info("application_starting", extra={"app": settings.app_name, "version": settings.version})
     yield
     logger.info("application_shutting_down")
@@ -160,24 +168,36 @@ app = FastAPI(
     redoc_url=None,
 )
 
+# Set up tracing before startup: FastAPI refuses middleware added after it starts.
+setup_tracing()
+
 # Middleware for request logging
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.time()
-    trace_id = request.headers.get("x-trace-id", str(uuid.uuid4()))
 
-    # Add trace_id to log context
-    extra = {"trace_id": trace_id, "method": request.method, "path": request.url.path}
+    # Capture the span ids now: the context is gone by the time the response returns.
+    trace_id, span_id = current_trace_ids()
+
+    # Add request details to the log context.
+    extra = {"method": request.method, "path": request.url.path}
 
     response = await call_next(request)
+
+    # The handler knows the real span id; prefer the header it set.
+    trace_id = response.headers.get("x-trace-id") or trace_id
 
     duration = (time.time() - start) * 1000
     logger.info("http_request", extra={
         **extra,
         "status": response.status_code,
         "duration_ms": round(duration, 2),
+        "trace_id": trace_id,
+        "span_id": span_id,
     })
-    response.headers["X-Trace-ID"] = trace_id
+    # Echo the real trace id so a caller can find the trace in Tempo.
+    if trace_id:
+        response.headers["X-Trace-ID"] = trace_id
     return response
 
 # Health endpoint
@@ -198,11 +218,14 @@ async def ingest(request: IngestRequest):
 
 # Query endpoint (mock retrieval + generation)
 @app.post("/v1/rag/query", response_model=QueryResponse)
-async def query(request: QueryRequest):
-    trace_id = str(uuid.uuid4())
+async def query(request: QueryRequest, response: Response):
     start = time.time()
 
     with tracer.start_as_current_span("rag.query") as span:
+        # Use the span's own id, so the response and the trace agree.
+        trace_id, _ = current_trace_ids()
+        if trace_id:
+            response.headers["X-Trace-ID"] = trace_id
         span.set_attribute("query", request.query)
         span.set_attribute("top_k", request.top_k)
         span.set_attribute("rerank", request.rerank)
