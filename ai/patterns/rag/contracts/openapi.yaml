@@ -1,0 +1,283 @@
+openapi: 3.0.3
+info:
+  title: RAG API
+  version: 1.0.0
+  description: Retrieval-Augmented Generation API with hybrid search, reranking, and guardrails.
+  contact:
+    name: Platform Team
+    email: platform@example.com
+servers:
+  - url: http://rag-api.k8s-lab.svc.cluster.local
+    description: Internal Kubernetes service
+  - url: http://localhost:8000
+    description: Local development (port-forward)
+
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      operationId: healthz
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /v1/rag/ingest:
+    post:
+      summary: Ingest documents into the vector store
+      operationId: ingestDocuments
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestRequest'
+      responses:
+        '200':
+          description: Documents ingested successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /v1/rag/query:
+    post:
+      summary: Query the RAG system
+      operationId: queryRAG
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: Query successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    IngestRequest:
+      type: object
+      required:
+        - documents
+      properties:
+        documents:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required:
+              - id
+              - title
+              - text
+            properties:
+              id:
+                type: string
+                pattern: '^[a-z0-9-]+$'
+                description: Unique document identifier
+              title:
+                type: string
+                maxLength: 200
+              text:
+                type: string
+                maxLength: 50000
+              metadata:
+                type: object
+                additionalProperties:
+                  type: string
+
+    IngestResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, partial, failed]
+        ingested:
+          type: integer
+        failed:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              doc_id:
+                type: string
+              error:
+                type: string
+
+    QueryRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: Natural language question
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+          description: Number of documents to retrieve
+        rerank:
+          type: boolean
+          default: true
+          description: Enable cross-encoder reranking
+        filters:
+          type: object
+          description: Metadata filters (e.g., category, tenant)
+          additionalProperties:
+            type: string
+
+    QueryResponse:
+      type: object
+      required:
+        - answer
+        - sources
+        - trace_id
+        - latency_ms
+      properties:
+        answer:
+          type: string
+          description: Generated answer
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/Source'
+        trace_id:
+          type: string
+          pattern: '^[0-9a-f]{32}$'
+          description: W3C trace ID for distributed tracing
+        latency_ms:
+          type: integer
+          minimum: 0
+          description: End-to-end latency in milliseconds
+
+    Source:
+      type: object
+      required:
+        - doc_id
+        - title
+        - score
+        - snippet
+      properties:
+        doc_id:
+          type: string
+        title:
+          type: string
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Relevance score (0-1)
+        snippet:
+          type: string
+          maxLength: 500
+          description: Text excerpt from the document
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - app
+        - version
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, down]
+        app:
+          type: string
+        version:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Invalid or missing authentication
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Invalid or missing token"
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              details:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    field:
+                      type: string
+                    message:
+                      type: string
+
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until next request allowed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Rate limit exceeded"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              trace_id:
+                type: string

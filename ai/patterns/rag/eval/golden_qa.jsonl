@@ -1,0 +1,10 @@
+{"query": "How do I scale a deployment in Kubernetes?", "expected_answer_contains": ["kubectl scale", "replicas"], "relevant_docs": ["doc-1", "doc-5"]}
+{"query": "What is a ConfigMap used for?", "expected_answer_contains": ["configuration data", "key-value"], "relevant_docs": ["doc-3"]}
+{"query": "How do I expose a pod externally?", "expected_answer_contains": ["LoadBalancer", "Service"], "relevant_docs": ["doc-2"]}
+{"query": "What is the difference between a ConfigMap and a Secret?", "expected_answer_contains": ["sensitive", "stringData"], "relevant_docs": ["doc-3", "doc-4"]}
+{"query": "How do I scale a deployment to 5 replicas?", "expected_answer_contains": ["kubectl scale", "replicas=5"], "relevant_docs": ["doc-1", "doc-5"]}
+{"query": "What are the types of Kubernetes Services?", "expected_answer_contains": ["ClusterIP", "LoadBalancer"], "relevant_docs": ["doc-2"]}
+{"query": "How do I mount a ConfigMap as a file?", "expected_answer_contains": ["mounted files", "volumeMounts"], "relevant_docs": ["doc-3"]}
+{"query": "What is a rolling update strategy?", "expected_answer_contains": ["maxUnavailable", "maxSurge"], "relevant_docs": ["doc-5"]}
+{"query": "How do I create a Secret from a file?", "expected_answer_contains": ["kubectl create secret", "--from-file"], "relevant_docs": ["doc-4"]}
+{"query": "What is the default Service type?", "expected_answer_contains": ["ClusterIP"], "relevant_docs": ["doc-2"]}
