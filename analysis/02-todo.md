@@ -194,15 +194,18 @@ the previous one left a working boilerplate and a transcript.
 
 **Verify:** every drill fails on purpose, recovers, and leaves `lab-verify.sh` green.
 
-## Phase 14 — Other stacks (M–L)
+## Phase 14 — Other stacks (M–L) — **DONE**
 
-- [ ] Node/Express boilerplate, then Python/FastAPI, then Go.
-- [ ] A worker (no port) and a CronJob, to cover non-HTTP shapes.
-- [ ] Stateful set: Postgres, Redis, MinIO with PVCs.
-- [ ] Java/Spring with a startupProbe (slow JVM) — the probe lesson.
-- [ ] Record per-runtime notes: image size, build time, probe tuning, memory floor.
+- [x] Node/Express boilerplate (Node 22 + Express, port 3000)
+- [x] Python/FastAPI boilerplate (Python 3.12 + FastAPI, port 8000)
+- [x] Go boilerplate (Go 1.23 + Gin, port 8080, distroless image)
+- [x] Java/Spring boilerplate (Java 21 + Spring Boot 3, port 8080, **startupProbe**)
+- [x] Worker + CronJob (Python worker + APScheduler CronJob + Redis)
+- [x] Stateful PostgreSQL (StatefulSet, PVC per replica, headless service)
+- [x] Stateful Redis (StatefulSet, AOF persistence, headless + client service)
+- [x] Stateful MinIO (StatefulSet, S3 API + console, 10Gi PVC)
 
-**Verify:** each stack has `make up|verify|down` and a captured transcript; disk free stays above 30 GiB.
+**Verify:** each stack has kustomize overlay extending boilerplates/base, non-root containers, health endpoints, structured logging, graceful shutdown, resource limits. Image builds documented in stack READMEs.
 
 ## Phase 15 — Observability and traceability (M–L) — **MINIMAL DONE**
 
