@@ -160,8 +160,9 @@ with the score table and one trace id pasted into the README.
 
 These are the only unchecked items from an otherwise finished phase:
 
-- [ ] Instrument one deployed app with the OTel SDK so its log line carries the
-      trace id that is visible in Tempo.
+- [x] Instrument two deployed apps with the OTel SDK (RAG mockup and FastAPI
+      stack) so the log line carries the trace id visible in Tempo. Verified
+      end to end; see `docs/example-runs.md` §8.
 - [ ] Route one alert to a webhook (Alertmanager receiver), and prove it fires.
 
 **Verify:** one LAN request is traceable end to end (Grafana → Tempo → log line),

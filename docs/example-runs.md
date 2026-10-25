@@ -382,3 +382,55 @@ first-real-run
 
 The page and the logo are served from the host `site/` directory through
 `minikube mount`. The live edit proves the hostPath mount works end-to-end.
+
+---
+
+## 8. Trace-to-log correlation — real
+
+Two apps were instrumented with the OpenTelemetry SDK and deployed to
+`k8s-lab`. Both write the live span id into every JSON log line, so a Tempo
+trace can be found from a log entry.
+
+The RAG mockup (`ai/patterns/rag`) after
+`kubectl apply -k ai/patterns/rag/overlays/local`:
+
+```console
+$ curl -s -D - -X POST http://127.0.0.1:18000/v1/rag/query \
+    -H 'Content-Type: application/json' \
+    -d '{"query":"How do I scale a deployment?","top_k":3}'
+HTTP/1.1 200 OK
+x-trace-id: f86f678f38135c6deb3f33a81670bb24
+
+{"answer":"Based on the documentation: To scale a Deployment ...",
+ "trace_id":"f86f678f38135c6deb3f33a81670bb24", ...}
+
+$ kubectl -n k8s-lab logs deploy/rag-api | grep f86f678f38135c6deb3f33a81670bb24
+query_completed  trace_id=f86f678f38135c6deb3f33a81670bb24 span_id=a39220a0d5053447
+http_request     trace_id=f86f678f38135c6deb3f33a81670bb24
+
+$ curl -s http://127.0.0.1:13200/api/traces/f86f678f38135c6deb3f33a81670bb24
+spans: ['POST /v1/rag/query http receive', 'POST /v1/rag/query http send',
+        'POST /v1/rag/query http send', 'POST /v1/rag/query']
+spans: ['retrieve', 'rerank', 'generate', 'guardrail', 'rag.query']
+```
+
+The FastAPI boilerplate (`boilerplates/stacks/python-fastapi`), using the same
+`OTLP_ENDPOINT`:
+
+```console
+$ curl -s -D - http://127.0.0.1:18001/api/hello
+HTTP/1.1 200 OK
+x-trace-id: bd627ac76f5b353d122f2a0fb5c34a07
+
+$ kubectl -n k8s-lab logs -l app.kubernetes.io/name=python-fastapi | grep bd627ac7
+{"msg":"http_request","trace_id":"bd627ac76f5b353d122f2a0fb5c34a07",
+ "span_id":"45a443aafbc85312","path":"/api/hello","status":200,"duration_ms":0.48}
+
+$ curl -s http://127.0.0.1:13200/api/traces/bd627ac76f5b353d122f2a0fb5c34a07
+spans: ['GET /api/hello http send', 'GET /api/hello http send', 'GET /api/hello']
+```
+
+Two defects had to be fixed to get here: the mockup generated a random uuid
+instead of using the active span, and the FastAPI stack used
+`BaseHTTPMiddleware`, which loses the span context. The stack now uses a pure
+ASGI middleware and adds `X-Trace-ID` to the response.
