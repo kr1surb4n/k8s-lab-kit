@@ -155,6 +155,24 @@ make eval
 - Latency p50: ≤ 500ms, p99: ≤ 2000ms
 ```
 
+### Recorded baseline
+
+`eval/results.json` is the Phase 16 mockup run over the 10 golden questions
+(2026-10-25). It is committed so later changes can be compared against it.
+
+| Metric | Value |
+|---|---|
+| Questions | 10 |
+| Recall@5 (mean) | 1.00 |
+| Faithfulness (mean) | 1.00 — placeholder, not an LLM judge yet |
+| Latency p50 | 1 ms |
+| Latency p99 | 12 ms |
+| Latency within 2 s | 100% |
+
+The numbers come from the mockup, whose generator is deterministic; they say the
+harness and contracts work, not that the prompts are good. Phase 17 replaces the
+placeholder faithfulness score with a real judgement.
+
 ## Failure Modes
 
 | Symptom | Cause | Fix |
