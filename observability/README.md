@@ -64,6 +64,58 @@ kubectl port-forward -n observability svc/kube-prometheus-stack-grafana 3000:80
   `last-applied-configuration` are kept.
 - Every host has an owner and an expected port list in the inventory.
 
+## Alert delivery proof
+
+`alert-webhook/` is a tiny stdlib HTTP server. It receives Alertmanager
+deliveries on `POST /alert`, keeps the last 50 summaries in memory, and exposes
+them on `GET /alerts`. `values/kube-prometheus-stack.yaml` enables Alertmanager
+and routes only the always-firing `LabWebhookTest` alert to it.
+
+```bash
+kubectl -n observability rollout status deploy/alert-webhook
+kubectl -n observability port-forward svc/alert-webhook 8080:80 &
+curl -s http://127.0.0.1:8080/alerts | python3 -m json.tool
+```
+
+Expected shape:
+
+```json
+{
+  "count": 1,
+  "alerts": [
+    {
+      "status": "firing",
+      "receiver": "lab-webhook",
+      "alerts": [
+        {
+          "name": "LabWebhookTest",
+          "state": "firing",
+          "summary": "Alertmanager webhook path test"
+        }
+      ]
+    }
+  ]
+}
+```
+
+The Alertmanager UI is on `svc/kube-prometheus-stack-alertmanager:9093`. The
+test alert repeats every 12 hours; remove the `lab.webhook` group from
+`alerts/lab-rules.yaml` when it is no longer useful. It is labelled
+`severity: warning` on purpose: the chart's default `InfoInhibitor` rule
+suppresses every `severity: info` alert.
+
+To prove a real symptom alert instead of the synthetic one, create a pod that
+cannot be scheduled:
+
+```bash
+kubectl apply -f observability/alert-webhook/fixtures/pending-pod.yaml
+# the PodNotReady rule fires after 10 minutes and appears in /alerts
+kubectl delete -f observability/alert-webhook/fixtures/pending-pod.yaml
+```
+
+The fixture requests 100 CPUs and 100 GiB, so it stays `Pending`. Deleting it
+sends the resolved notification because `send_resolved: true`.
+
 ## Files
 
 | Path | What |
@@ -72,6 +124,7 @@ kubectl port-forward -n observability svc/kube-prometheus-stack-grafana 3000:80
 | `values/` | trimmed Helm values for this hardware |
 | `inventory/hosts.yaml` | the hosts and what to check |
 | `alerts/lab-rules.yaml` | PrometheusRule for the lab |
+| `alert-webhook/` | in-cluster receiver for the Alertmanager test route |
 | `host/` | monitoring that survives the cluster |
 | `trace/` | how to add OpenTelemetry to an app |
 

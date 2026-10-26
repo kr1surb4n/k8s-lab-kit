@@ -1,0 +1,13 @@
+# Alertmanager webhook receiver: a tiny HTTP server, no custom image.
+# The script is generated into a ConfigMap, so the pod can run python:3.12-alpine.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+  - service.yaml
+
+configMapGenerator:
+  - name: alert-webhook-script
+    files:
+      - main.py

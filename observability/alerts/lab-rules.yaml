@@ -60,3 +60,17 @@ spec:
           annotations:
             summary: "root filesystem is below 15% free on {{ $labels.instance }}"
             description: "Prune images or PVCs before the kubelet evicts pods."
+
+    - name: lab.webhook
+      rules:
+        # Always firing, so a fresh cluster proves the Alertmanager route quickly.
+        # Remove this rule when the webhook path is no longer being demonstrated.
+        - alert: LabWebhookTest
+          expr: vector(1)
+          for: 0m
+          labels:
+            severity: warning
+            lab: webhook
+          annotations:
+            summary: "Alertmanager webhook path test"
+            description: "Always firing. Proves delivery to the in-cluster receiver."

@@ -100,6 +100,9 @@ run helm upgrade --install kube-prometheus-stack prometheus-community/kube-prome
   --values "$values/kube-prometheus-stack.yaml" \
   --set "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName=$storage_class"
 
+# Receiver for the Alertmanager test route; same namespace as Alertmanager.
+run "$LAB_KUBECTL" apply -k "$K8S_LAB_ROOT/observability/alert-webhook" -n "$namespace"
+
 # Uptime probes for hosts that are not in the cluster.
 run helm upgrade --install blackbox-exporter prometheus-community/prometheus-blackbox-exporter \
   --namespace "$namespace" \
@@ -138,3 +141,6 @@ log "  kubectl get pods -n $namespace"
 log "  kubectl port-forward -n $namespace svc/kube-prometheus-stack-grafana 3000:80"
 log "  password: kubectl get secret -n $namespace kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo"
 log "  prometheus: kubectl port-forward -n $namespace svc/kube-prometheus-stack-prometheus 9090:9090"
+log "  alertmanager: kubectl port-forward -n $namespace svc/kube-prometheus-stack-alertmanager 9093:9093"
+log "  webhook: kubectl port-forward -n $namespace svc/alert-webhook 8080:80"
+log "  received alerts: curl -s http://127.0.0.1:8080/alerts | python3 -m json.tool"

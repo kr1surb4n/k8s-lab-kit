@@ -1,7 +1,32 @@
 # Values for kube-prometheus-stack, trimmed for a 6 GiB cluster.
 # The defaults assume a real cluster; these assume a laptop.
 alertmanager:
-  enabled: false
+  enabled: true
+  # One receiver for the lab: an in-cluster webhook that records deliveries.
+  # The test alert is in alerts/lab-rules.yaml; everything else stays on "null".
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: "null"
+      group_by: ["namespace"]
+      group_wait: 10s
+      group_interval: 5m
+      repeat_interval: 12h
+      routes:
+        - matchers:
+            - alertname =~ "LabWebhookTest|PodNotReady"
+          receiver: "lab-webhook"
+    receivers:
+      - name: "null"
+      - name: "lab-webhook"
+        webhook_configs:
+          - url: "http://alert-webhook/alert"
+            send_resolved: true
+  alertmanagerSpec:
+    resources:
+      requests: {cpu: 20m, memory: 32Mi}
+      limits: {memory: 100Mi}
 
 grafana:
   enabled: true
