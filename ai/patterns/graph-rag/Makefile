@@ -3,11 +3,12 @@
 # Usage:
 #   make build          # build Docker image
 #   make deploy         # apply k8s manifests
+#   make up             # build, deploy and wait for the rollout
 #   make eval           # run evaluation against deployed API
 #   make port-forward   # port-forward for local testing
 #   make clean          # remove k8s resources
 
-.PHONY: build deploy eval port-forward clean test
+.PHONY: build deploy up eval port-forward clean test
 
 IMAGE := boilerplate/graph-rag-api:1.0
 NAMESPACE := k8s-lab
@@ -18,6 +19,11 @@ build:
 
 deploy:
 	kubectl apply -k k8s
+
+# Build, deploy and wait for the rollout to finish
+up: build deploy
+	@echo "Waiting for rollout..."
+	@kubectl rollout status deploy/graph-rag-api -n $(NAMESPACE) --timeout=180s
 
 # Wait for rollout, then run eval against port-forwarded service
 eval:
