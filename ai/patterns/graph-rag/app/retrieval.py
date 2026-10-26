@@ -16,7 +16,6 @@ from .llm import OllamaClient, StubEmbedder
 
 LOGGER = logging.getLogger("graphrag")
 REFUSAL = "The corpus does not contain enough information to answer this question."
-CITATION_RE = re.compile(r"([^\s\[\],;]+#c\d{4})")
 RRF_K = 60
 
 ANSWER_SYSTEM = (
@@ -27,7 +26,8 @@ ANSWER_SYSTEM = (
 ANSWER_TEMPLATE = """Answer the question using only the context below.
 
 Rules:
-- Cite every factual claim with the chunk id in square brackets, for example [doc-01#c0001].
+- Cite every factual claim with the exact chunk id that starts the context block, in square brackets.
+- Copy the whole id, including the document prefix and the #cNNNN suffix. Never shorten, invent, or use an example id.
 - Use only chunk ids that appear in the context.
 - If the context does not answer the question, reply exactly:
   {refusal}
@@ -57,20 +57,29 @@ def vector_search(
     limit: int,
 ) -> list[dict[str, Any]]:
     literal = vector_literal(query_vector)
-    rows = conn.execute(
-        """
-        SELECT c.id, c.document_id, d.title, d.path, c.text,
-               c.start_offset, c.end_offset, c.page_start, c.page_end,
-               1 - (e.vector <=> %s::vector) AS score
-        FROM embeddings e
-        JOIN chunks c ON c.id = e.chunk_id
-        JOIN documents d ON d.id = c.document_id
-        WHERE d.corpus = ANY(%s)
-        ORDER BY e.vector <=> %s::vector
-        LIMIT %s
-        """,
-        (literal, corpora, literal, limit),
-    ).fetchall()
+    # HNSW filters after the index scan. A small corpus can lose every
+    # candidate when the global nearest neighbours belong to a larger corpus.
+    # The local dataset is small, so force an exact scan for correctness.
+    conn.execute("SET LOCAL enable_indexscan = off")
+    conn.execute("SET LOCAL enable_bitmapscan = off")
+    try:
+        rows = conn.execute(
+            """
+            SELECT c.id, c.document_id, d.title, d.path, c.text,
+                   c.start_offset, c.end_offset, c.page_start, c.page_end,
+                   1 - (e.vector <=> %s::vector) AS score
+            FROM embeddings e
+            JOIN chunks c ON c.id = e.chunk_id
+            JOIN documents d ON d.id = c.document_id
+            WHERE d.corpus = ANY(%s)
+            ORDER BY e.vector <=> %s::vector
+            LIMIT %s
+            """,
+            (literal, corpora, literal, limit),
+        ).fetchall()
+    finally:
+        conn.execute("RESET enable_indexscan")
+        conn.execute("RESET enable_bitmapscan")
     return [_row(row) for row in rows]
 
 
@@ -265,6 +274,16 @@ def search(
     }
 
 
+# Return retrieved chunk ids that appear in the answer, in citation order.
+def find_citations(text: str, retrieved_ids: set[str]) -> list[str]:
+    # Match whole ids as strings: notes paths contain spaces, so a
+    # whitespace-delimited regex would truncate the id.
+    return sorted(
+        {chunk_id for chunk_id in retrieved_ids if chunk_id in text},
+        key=text.find,
+    )
+
+
 # Build the context block sent to the generator.
 def build_context(chunks: list[dict[str, Any]], max_chars: int = 12000) -> str:
     parts = []
@@ -332,14 +351,9 @@ def answer(
             num_ctx=8192,
         ).strip()
 
-    # Only retrieved chunk ids may appear in citations. Strip sentence
-    # punctuation that the model may leave after a bare id.
+    # Only retrieved chunk ids may appear in citations.
     retrieved_ids = {chunk["chunk_id"] for chunk in chunks}
-    cited_ids = [
-        match.rstrip(".,:;!?)]}")
-        for match in CITATION_RE.findall(text)
-        if match.rstrip(".,:;!?)]}") in retrieved_ids
-    ]
+    cited_ids = find_citations(text, retrieved_ids)
     citations = []
     for chunk_id in dict.fromkeys(cited_ids):
         chunk = next(item for item in chunks if item["chunk_id"] == chunk_id)

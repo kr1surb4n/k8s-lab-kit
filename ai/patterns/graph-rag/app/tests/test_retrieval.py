@@ -1,7 +1,7 @@
 """Retrieval helper tests that do not need a database."""
 import unittest
 
-from app.retrieval import build_context, corpora_list, rrf_fuse
+from app.retrieval import build_context, corpora_list, find_citations, rrf_fuse
 
 
 class RetrievalTests(unittest.TestCase):
@@ -35,6 +35,14 @@ class RetrievalTests(unittest.TestCase):
         self.assertIn("d#c0", context)
         self.assertIn("d#c1", context)
         self.assertNotIn("d#c9", context)
+
+    def test_find_citations_keeps_ids_with_spaces(self):
+        chunk_id = "notes:html/a file with spaces.html#c0001"
+        text = f"Fact [{chunk_id}] and another [doc-01#c0002]."
+        found = find_citations(
+            text, {chunk_id, "doc-01#c0002", "doc-01#c0003"}
+        )
+        self.assertEqual(found, [chunk_id, "doc-01#c0002"])
 
 
 if __name__ == "__main__":
