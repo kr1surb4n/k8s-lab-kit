@@ -1,0 +1,338 @@
+{
+  "corpus_version": "2026-10-26.1",
+  "document_count": 20,
+  "documents": [
+    {
+      "id": "doc-01",
+      "path": "docs/doc-01-objects.md",
+      "section": "Concepts > Objects",
+      "sha256": "540c0b3df2e3e0bf52a68d7280395ee911653788f3355dfa158b0a474ae9a6a1",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#common-setup",
+          "README.md"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Kubernetes objects used in this kit",
+      "words": 149
+    },
+    {
+      "id": "doc-02",
+      "path": "docs/doc-02-pods.md",
+      "section": "Concepts > Pods > Lifecycle",
+      "sha256": "27260146219f80aed74aca94f64a578940f7a979086481556cc6d183d736347c",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#a3",
+          "docs/runbooks.md#a7",
+          "manifests/a7/app.yaml"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Pods, shared network namespaces, and init containers",
+      "words": 165
+    },
+    {
+      "id": "doc-03",
+      "path": "docs/doc-03-deployments.md",
+      "section": "Concepts > Workloads > Deployments",
+      "sha256": "f79b1a1ea09883557a3689264b45de592b5246d3dc57db98ad6473d107df4fd8",
+      "source": {
+        "based_on": [
+          "manifests/a1/web.yaml",
+          "manifests/a6/web.yaml",
+          "docs/runbooks.md#a6"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Deployments own ReplicaSets, ReplicaSets own Pods",
+      "words": 139
+    },
+    {
+      "id": "doc-04",
+      "path": "docs/doc-04-services.md",
+      "section": "Concepts > Networking > Services",
+      "sha256": "5490b9f369b8e3ddfcff28cae5675e1d1b2a8e67dc334a555935b88ebee8fb8e",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#a4",
+          "manifests/a6/web.yaml",
+          "manifests/a7/postgres.yaml"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Services, ClusterIP, NodePort and LoadBalancer",
+      "words": 163
+    },
+    {
+      "id": "doc-05",
+      "path": "docs/doc-05-configmaps.md",
+      "section": "Concepts > Configuration > ConfigMaps",
+      "sha256": "cf1a9bbbb91043d05a8b7d398ea00c0f577c4c3a6186ec612ab2a2dbd950d0e8",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#a2",
+          "docs/runbooks.md#a5",
+          "manifests/a2/web.yaml"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "ConfigMaps as files and as environment variables",
+      "words": 168
+    },
+    {
+      "id": "doc-06",
+      "path": "docs/doc-06-secrets.md",
+      "section": "Concepts > Configuration > Secrets",
+      "sha256": "5596fc90941eb04b0f754e91b80df8120fd9c160c8ebd24935c58f20b3cab818",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#a5",
+          "manifests/a5/web.yaml",
+          "manifests/a7/postgres.yaml"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Secrets, basic auth, and what base64 really means",
+      "words": 175
+    },
+    {
+      "id": "doc-07",
+      "path": "docs/doc-07-hostpath.md",
+      "section": "Concepts > Storage > hostPath",
+      "sha256": "3791bc1e8af1d6a7ee5d0f196c554ddb09c6551ae6c702097a15af17063f52fb",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#a1",
+          "manifests/a1/web.yaml",
+          "manifests/a7/app.yaml"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "hostPath volumes and the minikube mount",
+      "words": 167
+    },
+    {
+      "id": "doc-08",
+      "path": "docs/doc-08-pvc.md",
+      "section": "Concepts > Storage > PersistentVolumeClaim",
+      "sha256": "97c7477115cfb0f46a8e646eae8154b996e9b4ddb81071101ac7ee771aa8aa7b",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#a7",
+          "manifests/a7/postgres.yaml"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "PersistentVolumes, claims, and the Postgres data directory",
+      "words": 158
+    },
+    {
+      "id": "doc-09",
+      "path": "docs/doc-09-probes.md",
+      "section": "Concepts > Workloads > Probes",
+      "sha256": "13b05ebbbe7d716d3eeaf37a28c476bb2d50b8c9df7796f343edb6277364f43d",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#a6",
+          "manifests/a6/web.yaml",
+          "manifests/a7/postgres.yaml"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Readiness, liveness, and why a probe is not paperwork",
+      "words": 168
+    },
+    {
+      "id": "doc-10",
+      "path": "docs/doc-10-resources.md",
+      "section": "Concepts > Workloads > Resources",
+      "sha256": "a0a4d9e2ae03ae41d958fe92a4bdb5c77a4e2856e1638388359c29f86988906c",
+      "source": {
+        "based_on": [
+          "manifests/a6/web.yaml",
+          "manifests/a7/postgres.yaml",
+          "ai/patterns/graph-rag/k8s/hpa.yaml"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Requests, limits, QoS, and autoscaling",
+      "words": 146
+    },
+    {
+      "id": "doc-11",
+      "path": "docs/doc-11-rollouts.md",
+      "section": "Concepts > Workloads > Update strategies",
+      "sha256": "6f6a4e519142f54d49eafe34764431fa662db192fa0a444235b95e8232949da5",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#a6",
+          "manifests/a6/web.yaml"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Rolling updates, surge, and rollback",
+      "words": 171
+    },
+    {
+      "id": "doc-12",
+      "path": "docs/doc-12-namespaces-rbac.md",
+      "section": "Concepts > Cluster > Namespaces and RBAC",
+      "sha256": "a3e2143bbe698e65b821c33429f18daa9165cc2de2a35f4a69447c158d88dfb6",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#common-setup",
+          "scripts/lab-up.sh",
+          "ai/patterns/graph-rag/k8s/rbac.yaml"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Namespaces, service accounts, and RBAC",
+      "words": 174
+    },
+    {
+      "id": "doc-13",
+      "path": "docs/doc-13-ingress.md",
+      "section": "Concepts > Networking > Ingress",
+      "sha256": "dbec89142aa056f5d1f3c0b698edbaa991e6d567a81dfc749269a60bb7a0bc44",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#n1",
+          "paczki/k8s/ingress.yaml.tpl"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Ingress and the ingress-nginx controller",
+      "words": 164
+    },
+    {
+      "id": "doc-14",
+      "path": "docs/doc-14-helm.md",
+      "section": "Concepts > Packaging > Helm",
+      "sha256": "de6d2f52b54bf18ea841c3f95a694556308d8eafc0cee09d9f6330dcc31a2212",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#h1"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Helm charts, releases, and rollback",
+      "words": 179
+    },
+    {
+      "id": "doc-15",
+      "path": "docs/doc-15-exercises.md",
+      "section": "Lab > Exercises A1\u2013A7",
+      "sha256": "e621b3d0f7953c7b0a4c786d95fdd9b1d7a06c1da7275d2bc0e3bf36f6e6b617",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md",
+          "docs/coverage-matrix.md"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "The seven exercises and what each one proves",
+      "words": 227
+    },
+    {
+      "id": "doc-16",
+      "path": "docs/doc-16-a7-stack.md",
+      "section": "Lab > A7 > Three-tier stack",
+      "sha256": "fa5d81aef2ec14403724f36f152b8f72dc8f23e9dc42c1f442c7129ca23e4773",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#a7",
+          "manifests/a7/app.yaml",
+          "manifests/a7/postgres.yaml"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "A7: nginx, php-fpm, PostgreSQL and SQLite in one stack",
+      "words": 155
+    },
+    {
+      "id": "doc-17",
+      "path": "docs/doc-17-postgres.md",
+      "section": "Concepts > Data > PostgreSQL",
+      "sha256": "7c750fa0e0c4b3a969e44307e2686e62b7ab8a5d45931d9e36061caaa80cceeb",
+      "source": {
+        "based_on": [
+          "manifests/a7/postgres.yaml",
+          "docs/runbooks.md#a7"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "PostgreSQL in the cluster",
+      "words": 156
+    },
+    {
+      "id": "doc-18",
+      "path": "docs/doc-18-observability.md",
+      "section": "Operations > Observability",
+      "sha256": "9fec1ba8d125eaa6e0dce5277e5c5e3fe33b6389fc7b9d84e815652254ff5bd1",
+      "source": {
+        "based_on": [
+          "observability/README.md",
+          "docs/example-runs.md",
+          "ai/patterns/graph-rag/mockup/main.py"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Observability stack and trace propagation",
+      "words": 183
+    },
+    {
+      "id": "doc-19",
+      "path": "docs/doc-19-recovery.md",
+      "section": "Operations > Recovery",
+      "sha256": "acc263e1ee37f2664ea27d909a57aa7bd168b93c860fa81c51a0896539929206",
+      "source": {
+        "based_on": [
+          "recovery/method.md",
+          "recovery/decision-tree.md",
+          "docs/runbooks.md#t1"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "Recovery drills and the evidence rule",
+      "words": 170
+    },
+    {
+      "id": "doc-20",
+      "path": "docs/doc-20-distributions.md",
+      "section": "Operations > Distributions",
+      "sha256": "2034cc14b0bf91c105ffa614b324d5353ffa102cd3be730673e8460677cbde0e",
+      "source": {
+        "based_on": [
+          "docs/runbooks.md#d1",
+          "scripts/cluster-create.sh",
+          "analysis/06-scope-expansion.md"
+        ],
+        "kind": "authored",
+        "snapshot": "2026-10-26"
+      },
+      "title": "minikube, k3s, MicroK8s, k3d and kind",
+      "words": 183
+    }
+  ]
+}

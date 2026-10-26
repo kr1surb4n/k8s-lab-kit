@@ -208,6 +208,21 @@ test_bastion_dryrun() {
   [[ $out == *"ufw"* ]] && ok "bastion setup shows the firewall step" || bad "bastion firewall" "$out"
 }
 
+# The Graph RAG corpus, manifest, and golden set must agree.
+test_graph_rag_corpus() {
+  local out
+  out=$(python3 "$kit/ai/patterns/graph-rag/corpus/tools/validate_corpus.py" 2>&1)
+  [[ $out == *"corpus ok"* ]] && ok "graph-rag corpus and golden set validate" || bad "graph-rag corpus" "$out"
+  if python3 -m py_compile \
+      "$kit/ai/patterns/graph-rag/eval/eval.py" \
+      "$kit/ai/patterns/graph-rag/corpus/tools/build_manifest.py" \
+      "$kit/ai/patterns/graph-rag/corpus/tools/validate_corpus.py" 2>/dev/null; then
+    ok "graph-rag python tools compile"
+  else
+    bad "graph-rag python tools compile"
+  fi
+}
+
 # Run a test when the filter matches.
 run() {
   local name=$1
@@ -231,6 +246,7 @@ run test_mkpasswd
 run test_cluster_dryrun
 run test_observability_dryrun
 run test_bastion_dryrun
+run test_graph_rag_corpus
 
 printf '\n%s passed, %s failed, %s skipped\n' "$pass" "$fail" "$skip"
 (( fail == 0 ))

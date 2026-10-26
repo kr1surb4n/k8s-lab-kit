@@ -5,10 +5,12 @@
 #   make deploy         # apply k8s manifests
 #   make up             # build, deploy and wait for the rollout
 #   make eval           # run evaluation against deployed API
+#   make corpus-manifest# regenerate corpus/MANIFEST.json
+#   make corpus-check   # validate the corpus and the golden set
 #   make port-forward   # port-forward for local testing
 #   make clean          # remove k8s resources
 
-.PHONY: build deploy up eval port-forward clean test
+.PHONY: build deploy up eval corpus-manifest corpus-check port-forward clean test
 
 IMAGE := boilerplate/graph-rag-api:1.0
 NAMESPACE := k8s-lab
@@ -39,9 +41,18 @@ eval:
 port-forward:
 	kubectl port-forward -n $(NAMESPACE) svc/graph-rag-api 8000:80
 
-# Run unit tests (if any)
-test:
-	@echo "No unit tests yet"
+# Regenerate the corpus manifest after editing a document.
+corpus-manifest:
+	python3 corpus/tools/build_manifest.py
+
+# Validate the corpus, its hashes, and the golden questions offline.
+corpus-check:
+	python3 corpus/tools/validate_corpus.py
+
+# Run the offline checks (the evaluation itself needs the service).
+test: corpus-check
+	python3 -m py_compile eval/eval.py corpus/tools/build_manifest.py corpus/tools/validate_corpus.py
+	@echo "graph-rag offline checks pass"
 
 # Remove all resources
 clean:

@@ -1,201 +1,219 @@
 #!/usr/bin/env python3
-# Graph RAG Evaluation — runs golden Q&A against the API.
-# Usage: python eval.py --url http://graph-rag-api:8000 --golden eval/golden_qa.jsonl
+# Graph RAG evaluation — runs the golden set against a live API.
+#
+# Usage:
+#   python eval.py --url http://localhost:8000 --golden eval/golden_qa.jsonl
+#
+# The golden file is the Phase 17 corpus schema: question, kind, expected doc
+# ids, expected answer facts, must_cite, and a graph path. Refusal questions
+# must produce no citations.
 import argparse
 import json
-import time
+import os
 import statistics
 import sys
-import os
-from typing import List, Dict, Any
-from dataclasses import dataclass
+import time
+from typing import List
 
 import httpx
-from pydantic import BaseModel
+
+REFUSAL_MARKERS = ("not in the corpus", "cannot answer", "no answer", "not available")
 
 
-@dataclass
-class GoldenQA:
-    query: str
-    expected_contains: List[str]
-    relevant_docs: List[str]
-    expected_graph_path: List[Dict]
-
-
-@dataclass
-class EvalResult:
-    query: str
-    answer: str
-    sources: List[Dict]
-    graph_path: List[Dict]
-    latency_ms: int
-    trace_id: str
-    recall_at_k: float
-    graph_path_accuracy: float
-    faithfulness: float
-    latency_ok: bool
-
-
-class GoldenQAModel(BaseModel):
-    query: str
-    expected_answer_contains: List[str]
-    relevant_docs: List[str]
-    expected_graph_path: List[Dict]
-
-
+# Load the JSONL golden set, one question per line.
 def load_golden(path: str) -> List[dict]:
     items = []
-    with open(path) as f:
-        for line in f:
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
             if line.strip():
                 items.append(json.loads(line))
     return items
 
 
-def graph_path_match(expected: List[Dict], actual: List[Dict]) -> float:
-    """Calculate graph path accuracy - fraction of expected edges found in actual."""
+# Score one expected graph path entry against the returned path.
+def graph_path_match(expected: List[dict], actual: List[dict]) -> float:
+    """Fraction of expected graph entries found in the returned path."""
     if not expected:
         return 1.0
-    expected_edges = {(e["source"], e["relation"], e["target"]) for e in expected}
-    actual_edges = {(e["source"], e["relation"], e["target"]) for e in actual}
-    if not expected_edges:
-        return 1.0
-    matched = len(expected_edges & actual_edges)
-    return matched / len(expected_edges)
+    actual_keys = set()
+    for entry in actual:
+        if "members" in entry:
+            actual_keys.add(("hyperedge", entry.get("relation"), tuple(sorted(entry["members"]))))
+        else:
+            actual_keys.add((entry.get("source"), entry.get("relation"), entry.get("target")))
+    matched = 0
+    for entry in expected:
+        if "members" in entry:
+            key = ("hyperedge", entry.get("relation"), tuple(sorted(entry["members"])))
+        else:
+            key = (entry.get("source"), entry.get("relation"), entry.get("target"))
+        if key in actual_keys:
+            matched += 1
+    return matched / len(expected)
 
 
-def evaluate(url: str, golden: List[dict], top_k: int = 5) -> List[dict]:
-    client = httpx.Client(base_url=url, timeout=30.0)
+# Ask the API one question and score the response.
+def evaluate_one(client, golden: dict, top_k: int) -> dict:
+    start = time.time()
+    response = client.post(
+        "/v1/graph-rag/query",
+        json={
+            "query": golden["question"],
+            "top_k": top_k,
+            "rerank": True,
+            "graph_hops": 2,
+        },
+    )
+    response.raise_for_status()
+    data = response.json()
+    latency = int((time.time() - start) * 1000)
+
+    answer = data.get("answer", "")
+    sources = data.get("sources", [])
+    graph_path = data.get("graph_path", [])
+    returned_docs = [source["doc_id"] for source in sources]
+    expected_docs = golden.get("expected_doc_ids", [])
+
+    relevant_found = sum(1 for doc_id in expected_docs if doc_id in returned_docs)
+    recall = relevant_found / len(expected_docs) if expected_docs else 1.0
+    citation_precision = (
+        sum(1 for doc_id in returned_docs if doc_id in expected_docs) / len(returned_docs)
+        if returned_docs
+        else 1.0
+    )
+    facts_ok = all(
+        fact.lower() in answer.lower()
+        for fact in golden.get("expected_answer_facts", [])
+    )
+    refusal_ok = True
+    if golden["kind"] == "refusal":
+        refusal_ok = not returned_docs and any(
+            marker in answer.lower() for marker in REFUSAL_MARKERS
+        )
+
+    return {
+        "id": golden["id"],
+        "kind": golden["kind"],
+        "question": golden["question"],
+        "answer": answer,
+        "sources": sources,
+        "graph_path": graph_path,
+        "latency_ms": latency,
+        "trace_id": data.get("trace_id", ""),
+        "recall_at_k": recall,
+        "citation_precision": citation_precision,
+        "graph_path_accuracy": graph_path_match(golden.get("expected_graph_path", []), graph_path),
+        "facts_ok": facts_ok,
+        "refusal_ok": refusal_ok,
+        # Faithfulness needs an LLM judge; Phase 17.5 replaces this placeholder.
+        "faithfulness": 1.0,
+        "latency_ok": latency <= 3000,
+    }
+
+
+# Run the whole set and return per-question results.
+def evaluate(url: str, golden: List[dict], top_k: int) -> List[dict]:
     results = []
-
-    for g in golden:
-        start = time.time()
-        try:
-            resp = client.post("/v1/graph-rag/query", json={
-                "query": g["query"],
-                "top_k": top_k,
-                "rerank": True,
-                "graph_hops": 2
-            })
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception as e:
-            print(f"ERROR on '{g['query']}': {e}")
-            continue
-
-        latency = int((time.time() - start) * 1000)
-        answer = data.get("answer", "")
-        sources = data.get("sources", [])
-        graph_path = data.get("graph_path", [])
-        trace_id = data.get("trace_id", "")
-
-        # Recall@k: fraction of relevant docs in top-k
-        returned_docs = [s["doc_id"] for s in sources]
-        relevant_found = sum(1 for d in g["relevant_docs"] if d in returned_docs)
-        recall = relevant_found / len(g["relevant_docs"]) if g["relevant_docs"] else 1.0
-
-        # Graph path accuracy
-        graph_acc = graph_path_match(g.get("expected_graph_path", []), graph_path)
-
-        # Faithfulness: placeholder (would use LLM-as-judge)
-        faithfulness = 1.0  # TODO: implement LLM judge
-
-        # Check expected keywords
-        expected_ok = all(kw.lower() in answer.lower() for kw in g.get("expected_answer_contains", []))
-
-        results.append({
-            "query": g["query"],
-            "answer": answer,
-            "sources": sources,
-            "graph_path": graph_path,
-            "latency_ms": latency,
-            "trace_id": trace_id,
-            "recall_at_k": recall,
-            "graph_path_accuracy": graph_acc,
-            "faithfulness": faithfulness,
-            "latency_ok": latency <= 3000  # p99 target
-        })
-
+    with httpx.Client(base_url=url, timeout=120.0) as client:
+        for question in golden:
+            try:
+                results.append(evaluate_one(client, question, top_k))
+            except Exception as exc:  # noqa: BLE001 - the report needs every failure
+                print(f"ERROR on {question['id']}: {exc}", file=sys.stderr)
     return results
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--url", default="http://localhost:8000", help="Graph RAG API base URL")
-    parser.add_argument("--golden", default="eval/golden_qa.jsonl", help="Golden Q&A file")
-    parser.add_argument("--top-k", type=int, default=5, help="Top-K for retrieval")
-    parser.add_argument("--output", default="eval/results.json", help="Output file")
-    args = parser.parse_args()
+# Print the aggregate score table and the per-question status.
+def report(results: List[dict], top_k: int) -> dict:
+    recalls = [item["recall_at_k"] for item in results]
+    precisions = [item["citation_precision"] for item in results]
+    graph_accs = [item["graph_path_accuracy"] for item in results]
+    latencies = [item["latency_ms"] for item in results]
+    faithful = [item["faithfulness"] for item in results]
 
-    print(f"Loading golden Q&A from {args.golden}...")
-    golden = []
-    with open(args.golden) as f:
-        for line in f:
-            if line.strip():
-                golden.append(json.loads(line))
-    print(f"Loaded {len(golden)} questions")
-
-    print(f"Evaluating against {args.url}...")
-    results = evaluate(args.url, golden, args.top_k)
-
-    if not results:
-        print("No results!")
-        sys.exit(1)
-
-    # Aggregate metrics
-    recalls = [r["recall_at_k"] for r in results]
-    graph_accs = [r["graph_path_accuracy"] for r in results]
-    latencies = [r["latency_ms"] for r in results]
-    faithful = [r["faithfulness"] for r in results]
-    latency_ok = sum(1 for r in results if r["latency_ok"])
-
-    print("\n=== EVALUATION RESULTS ===")
-    print(f"Questions evaluated: {len(results)}")
-    print(f"Recall@{args.top_k}:    mean={statistics.mean(recalls):.3f}, min={min(recalls):.3f}, max={max(recalls):.3f}")
-    print(f"Graph Path Acc:     mean={statistics.mean(graph_accs):.3f}")
-    print(f"Latency p50:        {statistics.median(latencies)}ms")
-    print(f"Latency p99:        {sorted(latencies)[int(0.99 * len(latencies))]}ms")
-    print(f"Latency OK (≤3s):   {latency_ok}/{len(results)} ({latency_ok/len(results)*100:.1f}%)")
-    print(f"Faithfulness:       {statistics.mean([r['faithfulness'] for r in results]):.3f}")
-
-    # Per-question details
-    print("\n=== PER-QUESTION ===")
-    for r in results:
-        status = "✓" if r["recall_at_k"] == 1.0 and r["latency_ok"] else "✗"
-        print(f"  {status} [{r['latency_ms']}ms] {r['query'][:60]}...")
-
-    # Save results
-    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
-    output_data = {
-        "summary": {
-            "total": len(results),
-            "recall_at_k_mean": statistics.mean(recalls),
-            "graph_path_accuracy_mean": statistics.mean(graph_accs),
-            "latency_p50_ms": statistics.median(latencies),
-            "latency_p99_ms": sorted(latencies)[int(0.99 * len(latencies))],
-            "latency_ok_rate": latency_ok / len(results),
-            "faithfulness_mean": statistics.mean([r['faithfulness'] for r in results]),
-        },
-        "details": results
+    summary = {
+        "total": len(results),
+        "answerable": sum(1 for item in results if item["kind"] == "answerable"),
+        "relation": sum(1 for item in results if item["kind"] == "relation"),
+        "refusal": sum(1 for item in results if item["kind"] == "refusal"),
+        "recall_at_k_mean": statistics.mean(recalls),
+        "citation_precision_mean": statistics.mean(precisions),
+        "graph_path_accuracy_mean": statistics.mean(graph_accs),
+        "facts_ok_rate": sum(1 for item in results if item["facts_ok"]) / len(results),
+        "refusal_ok_rate": sum(1 for item in results if item["refusal_ok"]) / len(results),
+        "latency_p50_ms": statistics.median(latencies),
+        "latency_p99_ms": sorted(latencies)[max(0, int(0.99 * len(latencies)) - 1)],
+        "latency_ok_rate": sum(1 for item in results if item["latency_ok"]) / len(results),
+        "faithfulness_mean": statistics.mean(faithful),
     }
 
-    with open(args.output, "w") as f:
-        json.dump(output_data, f, indent=2)
+    print("\n=== EVALUATION RESULTS ===")
+    print(f"Questions evaluated: {summary['total']}")
+    print(
+        f"Kind:              {summary['answerable']} answerable, "
+        f"{summary['relation']} relation, {summary['refusal']} refusal"
+    )
+    print(f"Recall@{top_k}:         {summary['recall_at_k_mean']:.3f}")
+    print(f"Citation precision: {summary['citation_precision_mean']:.3f}")
+    print(f"Graph path accuracy: {summary['graph_path_accuracy_mean']:.3f}")
+    print(f"Facts present:      {summary['facts_ok_rate']:.3f}")
+    print(f"Refusals correct:   {summary['refusal_ok_rate']:.3f}")
+    print(f"Latency p50:        {summary['latency_p50_ms']}ms")
+    print(f"Latency p99:        {summary['latency_p99_ms']}ms")
+    print(f"Latency OK (<=3s):  {summary['latency_ok_rate']:.3f}")
+    print(f"Faithfulness:       mean={summary['faithfulness_mean']:.3f} (placeholder)")
+
+    print("\n=== PER-QUESTION ===")
+    for item in results:
+        ok = (
+            item["recall_at_k"] == 1.0
+            and item["facts_ok"]
+            and item["refusal_ok"]
+            and item["latency_ok"]
+        )
+        print(f"  {'OK ' if ok else 'FAIL'} [{item['latency_ms']}ms] {item['id']} {item['question']}")
+    return summary
+
+
+# Parse arguments, run the evaluation, write results, and apply the thresholds.
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--url", default="http://localhost:8000")
+    parser.add_argument("--golden", default="eval/golden_qa.jsonl")
+    parser.add_argument("--top-k", type=int, default=5)
+    parser.add_argument("--output", default="eval/results.json")
+    args = parser.parse_args()
+
+    golden = load_golden(args.golden)
+    print(f"Loaded {len(golden)} questions from {args.golden}")
+    print(f"Evaluating against {args.url}")
+    results = evaluate(args.url, golden, args.top_k)
+    if not results:
+        print("No results", file=sys.stderr)
+        return 1
+
+    summary = report(results, args.top_k)
+    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+    with open(args.output, "w", encoding="utf-8") as handle:
+        json.dump({"summary": summary, "details": results}, handle, indent=2)
+        handle.write("\n")
     print(f"\nResults saved to {args.output}")
 
-    # Exit code based on thresholds
-    if statistics.mean(recalls) < 0.85:
-        print("FAIL: Recall@k below 0.85")
-        sys.exit(1)
-    if statistics.mean(graph_accs) < 0.80:
-        print("FAIL: Graph path accuracy below 0.80")
-        sys.exit(1)
-    if latency_ok / len(results) < 0.95:
-        print("FAIL: Latency OK rate below 95%")
-        sys.exit(1)
-
-    print("PASS: All thresholds met")
+    if summary["recall_at_k_mean"] < 0.85:
+        print("FAIL: recall@k below 0.85")
+        return 1
+    if summary["graph_path_accuracy_mean"] < 0.80:
+        print("FAIL: graph path accuracy below 0.80")
+        return 1
+    if summary["latency_ok_rate"] < 0.95:
+        print("FAIL: latency OK rate below 95%")
+        return 1
+    if summary["refusal_ok_rate"] < 1.0:
+        print("FAIL: a refusal question cited documents")
+        return 1
+    print("PASS: all thresholds met")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
