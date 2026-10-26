@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 -- The corpus documents and their provenance snapshot.
 CREATE TABLE IF NOT EXISTS documents (
     id             text PRIMARY KEY,
+    corpus         text NOT NULL DEFAULT 'lab',
     corpus_version text NOT NULL,
     title          text NOT NULL,
     section        text NOT NULL,
@@ -30,6 +31,11 @@ CREATE TABLE IF NOT EXISTS documents (
     updated_at     timestamptz NOT NULL DEFAULT now()
 );
 
+-- Existing databases created before the corpus column need the additive change.
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS corpus text NOT NULL DEFAULT 'lab';
+CREATE INDEX IF NOT EXISTS documents_corpus_idx ON documents (corpus);
+CREATE UNIQUE INDEX IF NOT EXISTS documents_corpus_path_uidx ON documents (corpus, path);
+
 -- Chunks keep their offsets so a citation can point at a real span.
 CREATE TABLE IF NOT EXISTS chunks (
     id              text PRIMARY KEY,
@@ -39,9 +45,15 @@ CREATE TABLE IF NOT EXISTS chunks (
     start_offset    integer NOT NULL CHECK (start_offset >= 0),
     end_offset      integer NOT NULL CHECK (end_offset > start_offset),
     content_sha256  text NOT NULL,
+    page_start      integer,
+    page_end        integer,
     tsv             tsvector GENERATED ALWAYS AS (to_tsvector('english', text)) STORED,
     UNIQUE (document_id, ordinal)
 );
+
+-- Existing databases need the page columns; notes and Markdown leave them null.
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS page_start integer;
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS page_end integer;
 
 -- One embedding row per chunk. The dimension is fixed by the chosen model.
 CREATE TABLE IF NOT EXISTS embeddings (
