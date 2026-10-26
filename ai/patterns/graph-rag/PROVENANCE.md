@@ -29,6 +29,13 @@ This directory was **imported from a different repository**, not written here.
 - Removed the duplicate `boilerplates/base` include from the kustomization; the
   standalone Deployment is complete.
 
+## Post-import changes (Phase 17 preparation, 2026-10-26)
+
+- Added `models/` with the local Ollama Modelfiles and the verified model matrix.
+- Updated the README component table to the chosen `bge-m3-local` +
+  `granite3.3-8b-local` stack, with `qwen3-8b-local` as the fallback.
+- Added the `up` target to the Makefile so the plan's `make up` command is real.
+
 ## Known limitations (Phase 17 work, not import defects)
 
 - The mockup keeps documents and relations in memory. There is no pgvector

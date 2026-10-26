@@ -1,12 +1,11 @@
 # What is to be done — remaining work after Phase 16
 
-This is the accurate, current work description. It replaces the "next actions"
-in `resume.md` (which is stale) and complements the phase list in
-`analysis/02-todo.md`.
+This is the accurate, current work description. It complements the short
+pointer in `resume.md` and the phase list in `analysis/02-todo.md`.
 
-Written: 2026-10-25
+Written: 2026-10-25; updated 2026-10-26
 Branch: `main`
-HEAD: `1ac78a0 chore: ignore eval results file`
+HEAD: `0856b88` before the Phase 17 model-selection commit; see `git log -1`
 
 ---
 
@@ -20,7 +19,7 @@ HEAD: `1ac78a0 chore: ignore eval results file`
 | Phase 14 — other stacks | **done** | `boilerplates/stacks/` (8 stacks), commit `da0b869` |
 | Phase 15 — observability | **done** | commits `5e920a2`, `fffdfc0`; trace and webhook proofs in `docs/example-runs.md` §8–§9 |
 | Phase 16 — RAG pattern | **done** | `ai/patterns/rag/`, commits `c1adaae` … `f7b0f3c` |
-| Phase 17 — Graph RAG | **not started** | attempted work was never committed and was rolled back |
+| Phase 17 — Graph RAG | **scaffold + model set ready; implementation not started** | `ai/patterns/graph-rag/`, `ai/patterns/graph-rag/models/README.md` |
 | Phase 18 — cloud free tier | **not started** | same |
 | `make test` | **36/36 green** | verified on a clean checkout of `HEAD` |
 | minikube | **running** | control plane, kubelet, apiserver up |
@@ -69,6 +68,17 @@ with a reproducible score per commit.
 Proposed location: `ai/patterns/graph-rag/` (same shape as the Phase 16 entry, so
 the catalogue stays uniform). Keep `ai/patterns/rag/` untouched as the baseline.
 
+**Model decision (done, 2026-10-26):** embeddings use `bge-m3-local` (1024-dim,
+8192 ctx); generation uses `granite3.3-8b-local` (Q4_K_M, 8k runtime context)
+with `qwen3-8b-local` as the fallback. The GGUFs were already local; both
+required models are imported and verified. Reranking starts as a listwise LLM
+prompt on Granite; add `BAAI/bge-reranker-v2-m3` only if the evaluation
+justifies it. See `ai/patterns/graph-rag/models/README.md`.
+
+**Host note:** a `llama.cpp` server was holding about 6.4 GiB of the 8 GiB GPU
+when the models were verified. Stop it only if it is yours; otherwise the 8B
+model runs on CPU (correct but slow).
+
 ### 17.1 Corpus and golden set (M)
 
 - [ ] A 20-document sample corpus with known answers, committed to the repo.
@@ -96,8 +106,9 @@ human can check the expected citations by hand.
 ### 17.3 Ingest job (M–L)
 
 - [ ] Chunk (fixed size + overlap; record offsets).
-- [ ] Embed on the host GPU (`bge-m3` or `nomic-embed-text`), with a deterministic
-      stub embedder so the eval can run without a GPU.
+- [ ] Embed on the host GPU (`bge-m3-local`; `nomic-embed-text-v1.5` as the
+      fallback), with a deterministic stub embedder so the eval can run without
+      a GPU.
 - [ ] Extract entities and relations; write both pairwise edges and at least one
       real hyperedge (3+ members) to prove the model.
 - [ ] Write provenance for every row.
@@ -111,6 +122,8 @@ table returns the expected 3-member relation for a known document set.
 - [ ] One small Python service in the cluster (`ai/patterns/graph-rag/app/`).
 - [ ] Pipeline: rewrite → hybrid retrieve (BM25 + vector, reciprocal-rank fusion)
       → graph expand (2 hops or hyperedge members) → rerank → answer + citations.
+- [ ] Rerank with a listwise LLM prompt on `granite3.3-8b-local` first; add the
+      `BAAI/bge-reranker-v2-m3` cross-encoder only if the eval shows a gain.
 - [ ] Response contract: `answer`, `citations[]` (doc id, chunk id, span),
       `graph_path[]`, `scores`, `trace_id`, `prompt_version`, `model_version`.
 - [ ] OpenTelemetry spans exported to Tempo; the `trace_id` also appears in the

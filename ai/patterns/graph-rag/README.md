@@ -46,14 +46,30 @@
 
 | Component | Technology | Config |
 |-----------|------------|--------|
-| Vector Embedding | `BAAI/bge-small-en-v1.5` (384-dim) | batch=32, normalize=True |
+| Vector Embedding | `bge-m3-local` via Ollama (1024-dim) | batch=32, normalize=True |
 | Vector Store | PGVector (PostgreSQL 16) | HNSW, m=16, ef=64 |
 | BM25 | PostgreSQL tsvector | title^2 + body |
 | Hybrid Fusion | RRF (k=60) | α=0.5 |
-| Graph DB | Apache AGE (PostgreSQL extension) | cypher queries |
-| Reranker | `BAAI/bge-reranker-base` | top-50 → top-5 |
-| Generator | `mistralai/Mistral-7B-Instruct-v0.3` | 4-bit GPTQ, temp=0.3 |
+| Graph DB | Plain Postgres tables + recursive CTEs; Apache AGE optional | see the Phase 17 plan |
+| Reranker | LLM listwise via `granite3.3-8b-local` (default); optional `BAAI/bge-reranker-v2-m3` | top-20 → top-5 |
+| Generator | `granite3.3-8b-local` Q4_K_M (primary); `qwen3-8b-local` fallback | temp=0.2, num_ctx=8192 |
 | Guardrail | Presidio + custom | PII, toxicity, format |
+
+The component table is the Phase 17 target. The imported architecture diagram
+and schema still show Apache AGE; the implementation uses plain Postgres tables
+and recursive CTEs as the primary graph layer, with AGE as an optional adapter.
+
+## Local model setup
+
+The local model set is chosen and imported. See
+[`models/README.md`](models/README.md) for the full matrix, import commands and
+verification commands.
+
+- Required: `bge-m3-local` (embeddings) and `granite3.3-8b-local` (generation).
+- Optional: `qwen3-8b-local` (fallback), `phi-4-mini-local` (fast fallback),
+  `nuextract-local` (structured extraction).
+- Rerank: listwise LLM prompt with Granite first; add a cross-encoder only if
+  the evaluation justifies it.
 
 ## Graph Schema (Apache AGE)
 

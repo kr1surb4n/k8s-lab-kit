@@ -246,6 +246,8 @@ the previous one left a working boilerplate and a transcript.
 
 ## Phase 17 — RAG with graphs and hypergraphs (L)
 
+- [x] Local model set chosen and imported: `bge-m3-local` + `granite3.3-8b-local`
+      (fallback `qwen3-8b-local`); see `ai/patterns/graph-rag/models/README.md`.
 - [ ] Sample corpus with known answers; golden question set.
 - [ ] Ingest + chunk + embed (host GPU) + provenance into Postgres.
 - [ ] pgvector index; BM25 for hybrid; graph tables + hyperedge join table.

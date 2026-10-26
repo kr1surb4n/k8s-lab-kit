@@ -3,10 +3,15 @@
 **Snapshot:** 2026-10-26
 **Path:** `/home/kris/00___Castle/07__WorkShops/k8s`
 **Branch:** `main`
-**HEAD:** `f584d05 feat(observability): route alerts to an in-cluster webhook`
+**HEAD:** `0856b88` at the start of this snapshot; see `git log -1` for the latest
 **Offline gate:** `make test` → **36 passed, 0 failed, 0 skipped**
-**Tracked files:** 193
-**Working tree:** clean before this report was added
+**Tracked files:** 193 before the Phase 17 model files were added
+**Working tree:** clean before this report was updated
+
+**Update (later on 2026-10-26):** the Phase 17 local model set was chosen and
+imported (`bge-m3-local` + `granite3.3-8b-local`, with `qwen3-8b-local` as the
+fallback). See `ai/patterns/graph-rag/models/README.md` and `resume.md`. The
+phase is still implementation-not-started.
 
 This report describes what the repository contains now, what changed in the
 2026-10-25/26 session, what was salvaged from the abandoned capital-S copy, and
@@ -47,7 +52,7 @@ current-state pointer is `resume.md`. The phase list is `analysis/02-todo.md`.
 | 14 | Eight stack templates | **done** | `boilerplates/stacks/` |
 | 15 | Observability | **done** | stack healthy; both apps instrumented; Alertmanager webhook delivered |
 | 16 | RAG pattern + evaluation | **done** | `ai/patterns/rag/`, `ai/patterns/rag/eval/results.json` |
-| 17 | Graph RAG | **scaffold imported, not built** | `ai/patterns/graph-rag/`, `PROVENANCE.md` |
+| 17 | Graph RAG | **scaffold + model set ready, not built** | `ai/patterns/graph-rag/`, `models/README.md`, `PROVENANCE.md` |
 | 18 | Cloud free tier | **not started** | plan in `analysis/07` §5 |
 
 Phases 9–11 are the only old phases with open boxes; they are documented rather

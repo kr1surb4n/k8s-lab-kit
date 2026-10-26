@@ -5,7 +5,7 @@ details.
 
 - **Folder:** `/home/kris/00___Castle/07__WorkShops/k8s`
 - **Date:** 2026-10-26
-- **State:** **Phases 0–16 done, including the Phase 15 webhook; Phase 17 scaffold imported but not built; Phase 18 open**
+- **State:** **Phases 0–16 done; Phase 17 scaffold and local model set ready, implementation not started; Phase 18 open**
 - **Git:** repository on `main`; conventional commits, one change per commit
 - **Offline gate:** `make test` → **36 passed, 0 failed**
 - **Cluster:** minikube running; `observability` healthy with Alertmanager and the webhook receiver
@@ -47,6 +47,7 @@ free-tier experiment (18) are the remaining phases; see
 | Observability full stack (Prometheus, Grafana, Loki, Tempo, OTel) | `observability/`, running in `observability` namespace |
 | Alertmanager → in-cluster webhook | `observability/alert-webhook/`, proof in `docs/example-runs.md` §9 |
 | RAG pattern + eval baseline | `ai/patterns/rag/`, `ai/patterns/rag/eval/results.json` |
+| Phase 17 local model set | `ai/patterns/graph-rag/models/`; `bge-m3-local` + `granite3.3-8b-local` imported and verified |
 | Bastion scaffold (host + in-cluster) | `bastion/` |
 | Cluster skeletons (minikube, kind, k3d, k3s, managed) | `clusters/` |
 | Tool installer (user-space + apt fallback) | `setup/install-tools.sh` |
@@ -56,8 +57,11 @@ free-tier experiment (18) are the remaining phases; see
 1. **Phase 17 — Graph RAG.** Corpus, pgvector/AGE schema, ingest, hybrid +
    2-hop retrieval, rerank, eval harness, k8s packaging. A cleaned scaffold was
    imported from the abandoned capital-S copy and is marked in
-   `ai/patterns/graph-rag/PROVENANCE.md`; it is mock-only, so the phase itself
-   is still open. The detailed checklist is `analysis/07-what-to-do.md` §3.
+   `ai/patterns/graph-rag/PROVENANCE.md`; it is mock-only. The local model set
+   is chosen and imported (`bge-m3-local` + `granite3.3-8b-local`, with
+   `qwen3-8b-local` as fallback), but the implementation has not started. The
+   detailed checklist is `analysis/07-what-to-do.md` §3 and the model setup is
+   `ai/patterns/graph-rag/models/README.md`.
 2. **Phase 18 — cloud free tier.** Plan-only until an account is provided; the
    deliverable is provider docs, Terraform validated with `terraform plan`, the
    A6 overlay, and a teardown checklist.
@@ -82,11 +86,24 @@ kubectl -n observability get pods
 kubectl -n observability port-forward svc/alert-webhook 8080:80 &
 curl -s http://127.0.0.1:8080/alerts | python3 -m json.tool
 
-# 4. Phase 17
-make -C ai/patterns/graph-rag up
-make -C ai/patterns/graph-rag eval
+# 4. Phase 17 — confirm the local models first
+ollama list | grep -E 'bge-m3|granite3.3|qwen3'
+curl -s http://localhost:11434/api/embed \
+  -d '{"model":"bge-m3-local","input":["hello"]}' \
+  | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["embeddings"][0]))'
+# expect 1024
 
-# 5. Phase 18 — plan only until an account exists
+curl -s http://localhost:11434/api/chat \
+  -d '{"model":"granite3.3-8b-local","messages":[{"role":"user","content":"Reply with exactly: ok"}],"stream":false}' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["message"]["content"])'
+# expect ok
+
+# 5. Phase 17 — build the corpus and schema first; the imported mockup is not the deliverable
+sed -n '61,156p' analysis/07-what-to-do.md
+# Implement §17.1–§17.3, then the retrieval service and eval.
+# See ai/patterns/graph-rag/models/README.md for the model commands.
+
+# 6. Phase 18 — plan only until an account exists
 terraform -chdir=cloud/oracle init -backend=false
 terraform -chdir=cloud/oracle validate
 terraform -chdir=cloud/oracle plan
@@ -96,8 +113,8 @@ terraform -chdir=cloud/oracle plan
 
 | Trap | Where it will bite | Handle |
 |---|---|---|
-| Disk is 77% full (~151 GiB free) | minikube images + model downloads | prune images after each stack, `make doctor` warns below 40 GiB |
-| ~11 GiB RAM available | 6 GiB cluster + Postgres + observability | one stack at a time |
+| Disk is 76% full (~157 GiB free) | minikube images + model downloads | prune images after each stack, `make doctor` warns below 40 GiB |
+| 30 GiB RAM total, ~22 GiB available with models idle | 6 GiB cluster + Postgres + observability | one stack at a time; stop Ollama models when not in use |
 | `minikube mount` is a foreground process | A1/A7 pods stuck in `ContainerCreating` | `scripts/lab-up.sh a1 --mount` detaches it and records the pid |
 | `subPath` mounts never update | A2 would look broken | A2/A5 use directory mounts; written into manifests and runbook |
 | ConfigMap is 1 MiB, UTF-8 only | images cannot live there | images go on the hostPath (A1) |
@@ -107,7 +124,8 @@ terraform -chdir=cloud/oracle plan
 | Fake `kubectl` always succeeds | false confidence | `tests/run.sh` includes failure cases; the doc labels the fake |
 | Bitnami tag drift | H1 breaks | `helm show values` before copying any snippet |
 | `severity: info` alerts never notify | webhook route matches but stays silent | chart's `InfoInhibitor` inhibits all info alerts; use `warning` for the test route |
-| Ollama models are host-side | eval cannot run inside the cluster | query the host endpoint from the service, never bake models into the image |
+| Ollama models and the GPU are host-side | eval cannot run inside the cluster; 8B models fall back to CPU if the GPU is busy | query the host endpoint from the service; never bake models into the image; check `nvidia-smi` |
+| `llama.cpp` server holds ~6.4 GiB of the 8 GiB GPU | Granite/Qwen3 load on CPU and are slow | stop PID 47489 only if it is yours; `ollama ps` shows the processor |
 | pgvector + Apache AGE in one image | extension availability differs per tag | tables are primary; AGE is an optional adapter |
 
 ## Decisions to keep, and the ones to revisit
@@ -121,6 +139,8 @@ Keep:
   layer; Apache AGE is optional and must not be required for evaluation.
 - Embeddings and generation run on the host GPU through Ollama; the cluster
   service is a thin client. Real models only — no stub in the recorded path.
+  Chosen: `bge-m3-local` + `granite3.3-8b-local`; `qwen3-8b-local` is the
+  fallback; rerank with the LLM first, add a cross-encoder only if needed.
 - The module is sourced from `.coatrc`, **not** added to `COAT_MODULE_ORDER`, so
   a Coat update never conflicts.
 
@@ -140,8 +160,9 @@ Read in this order, then run the commands:
 
 1. `resume.md` (this file) — state and next actions.
 2. `analysis/07-what-to-do.md` — the remaining work, in order.
-3. `analysis/02-todo.md` — the full phase list.
-4. `docs/runbooks.md` — the exercise you are about to run.
+3. `ai/patterns/graph-rag/models/README.md` — the chosen local models.
+4. `analysis/02-todo.md` — the full phase list.
+5. `docs/runbooks.md` — the exercise you are about to run.
 
 ```bash
 make test        # must be green before changing anything
@@ -180,3 +201,9 @@ git status       # must be clean before you start
 - Enabled Alertmanager, added the in-cluster webhook receiver, and proved both
   the synthetic `LabWebhookTest` and a real `PodNotReady` delivery.
 - Added `docs/REPO-STATE.md` as the full repository snapshot.
+- Inventoried the local GGUF and LM Studio models; chose `bge-m3` for embeddings
+  and Granite 3.3 8B for generation, with Qwen3 8B as the fallback.
+- Imported and verified `bge-m3-local` (1024-dim), `granite3.3-8b-local` and
+  `qwen3-8b-local`; added the missing chat templates.
+- Recorded the model setup in `ai/patterns/graph-rag/models/` and updated the
+  Phase 17 docs.
