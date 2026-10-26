@@ -10,6 +10,7 @@ resources:
   - secret.yaml
   - rbac.yaml
   - hpa.yaml
+  - networkpolicy.yaml
 
 labels:
   - pairs:
@@ -39,31 +40,6 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
         value: 8000
-      - op: add
-        path: /spec/template/spec/containers/0/env
-        value:
-          - name: APP_NAME
-            value: "graph-rag-api"
-          - name: APP_ENV
-            value: "lab"
-          - name: VERSION
-            value: "1.0.0"
-          - name: OTLP_ENDPOINT
-            value: "http://otel-collector-opentelemetry-collector.observability:4318/v1/traces"
-      - op: replace
-        path: /spec/template/spec/containers/0/resources/limits/memory
-        value: "8Gi"
-      - op: replace
-        path: /spec/template/spec/containers/0/resources/requests/memory
-        value: "4Gi"
-      - op: add
-        path: /spec/template/spec/containers/0/resources/limits
-        value:
-          nvidia.com/gpu: "1"
-      - op: add
-        path: /spec/template/spec/containers/0/resources/requests
-        value:
-          nvidia.com/gpu: "1"
     target:
       kind: Deployment
 

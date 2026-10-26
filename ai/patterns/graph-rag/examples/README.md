@@ -10,6 +10,7 @@ application and use the same eval database; none of them needs private notes.
 | [OCR for image-only PDFs](ocr-image-pdfs.md) | Render low-text PDF pages and read them with the `tesseract` CLI | Off (`ocr: false`) |
 | [OpenTelemetry spans](opentelemetry-spans.md) | Trace answer/search with counts only, console or OTLP | Off (`otel.enabled: false`) |
 | [Destructive failure drills](failure-drills.md) | Delete a cited document, empty `edge_nodes`; the answer must fail loudly | Guard off (`require_graph: false`) |
+| [Kubernetes packaging](kubernetes-packaging.md) | Kustomize base with non-root, probes, resources, Secrets, NetworkPolicy | Rendered offline |
 
 The main setup is in [`../app/README.md`](../app/README.md). Run commands from
 `ai/patterns/graph-rag` unless a page says otherwise.

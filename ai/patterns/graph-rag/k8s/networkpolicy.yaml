@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: graph-rag-api
+  namespace: k8s-lab
+  labels:
+    app.kubernetes.io/name: graph-rag-api
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: graph-rag-api
+  policyTypes:
+    - Ingress
+    - Egress
+  # The app only needs to reach the evaluation Postgres and the local OTel
+  # collector; everything else is denied by default.
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: UDP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - protocol: TCP
+          port: 4318
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: k8s-lab
+      ports:
+        - protocol: TCP
+          port: 8000

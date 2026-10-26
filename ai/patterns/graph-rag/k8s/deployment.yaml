@@ -26,6 +26,11 @@ spec:
         prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: graph-rag-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
         - name: graph-rag-api
           image: boilerplate/graph-rag-api:1.0
@@ -50,17 +55,16 @@ spec:
                   fieldPath: status.podIP
           resources:
             requests:
-              cpu: "1000m"
-              memory: "4Gi"
-              nvidia.com/gpu: "1"
+              cpu: "500m"
+              memory: "1Gi"
             limits:
-              memory: "8Gi"
-              nvidia.com/gpu: "1"
+              cpu: "1000m"
+              memory: "2Gi"
           readinessProbe:
             httpGet:
               path: /healthz
               port: 8000
-            initialDelaySeconds: 30
+            initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
@@ -68,7 +72,7 @@ spec:
             httpGet:
               path: /healthz
               port: 8000
-            initialDelaySeconds: 60
+            initialDelaySeconds: 30
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
@@ -76,30 +80,20 @@ spec:
             httpGet:
               path: /healthz
               port: 8000
-            initialDelaySeconds: 10
+            initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
           volumeMounts:
-            - name: model-cache
-              mountPath: /models
             - name: tmp
               mountPath: /tmp
       volumes:
-        - name: model-cache
-          emptyDir:
-            sizeLimit: 10Gi
         - name: tmp
           emptyDir:
-            sizeLimit: 2Gi
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: nvidia.com/gpu
-                    operator: Exists
-      tolerations:
-        - key: nvidia.com/gpu
-          operator: Exists
-          effect: NoSchedule
+            sizeLimit: 1Gi
