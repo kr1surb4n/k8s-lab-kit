@@ -1,0 +1,63 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please describe the problem and proposed solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this solve? Who benefits?
+      placeholder: |
+        As a user of the Graph RAG API, I want to...
+        So that...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How should it work? Sketch the API, CLI, or manifest changes.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What else did you consider? Why this approach?
+  - type: input
+    id: spec
+    attributes:
+      label: Related Spec (if any)
+      description: Path to spec file in `specs/` (e.g., specs/05-hardened-manifests.md)
+      placeholder: specs/05-hardened-manifests.md
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Which area does this touch?
+      options:
+        - graph-rag (app, eval, k8s)
+        - boilerplates / stacks
+        - recovery / drills
+        - observability
+        - docs / guides
+        - CI / tooling
+        - other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I've read the relevant spec/design doc
+          required: false
+        - label: This aligns with the project's learning-kit purpose
+          required: true
+        - label: I can implement this or help test it
+          required: false

@@ -1,0 +1,80 @@
+name: Bug Report
+description: Report a reproducible bug
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill in the details below.
+  - type: input
+    id: component
+    attributes:
+      label: Component
+      description: Which part is affected? (e.g., graph-rag-api, boilerplates, recovery, observability)
+      placeholder: graph-rag-api
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / Commit
+      description: Git commit hash or tag (run `git rev-parse HEAD`)
+      placeholder: a12424f
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps to trigger the bug
+      placeholder: |
+        1. Run `make db-up migrate`
+        2. Run `.venv/bin/python -m app.cli ask "..." --corpus lab --db eval`
+        3. Observe error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happens? (error message, logs, wrong output)
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        - OS: (e.g., Ubuntu 22.04, macOS 14)
+        - minikube version: `minikube version`
+        - kubectl version: `kubectl version --client`
+        - Python: `python --version`
+        - Docker: `docker version`
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs / Output
+      description: Paste any error messages, stack traces, or `make test` output
+      render: shell
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I ran `make test` and it passes (38/38)
+          required: true
+        - label: I searched existing issues for duplicates
+          required: true
+        - label: This is not a security issue (use Security Advisory instead)
+          required: true

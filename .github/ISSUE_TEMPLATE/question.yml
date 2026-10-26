@@ -1,0 +1,44 @@
+name: Question
+description: Ask a question about usage, design, or implementation
+title: "[Question] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question? We're happy to help. Check the docs first:
+        - `docs/REPO-STATE.md` — component inventory
+        - `analysis/07-what-to-do.md` — current plan
+        - `ai/patterns/graph-rag/app/README.md` — Graph RAG usage
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What do you want to know?
+      placeholder: |
+        How do I configure the private notes source to use a different path?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Related Area
+      options:
+        - Graph RAG (app, eval, models)
+        - Kubernetes manifests / Kustomize
+        - Minikube / cluster setup
+        - Recovery drills
+        - Observability stack
+        - Documentation / guides
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues/discussions first
+          required: true
+        - label: This is not a bug report or feature request
+          required: true

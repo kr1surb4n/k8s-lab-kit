@@ -1,0 +1,34 @@
+extends: default
+
+rules:
+  line-length:
+    max: 120
+    level: warning
+  trailing-spaces: enable
+  empty-lines:
+    max: 2
+    max-start: 0
+    max-end: 1
+  document-start: disable
+  document-end: disable
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
+  truthy:
+    allowed-values: ['true', 'false']
+    check-keys: true
+
+ignore: |
+  .venv
+  node_modules
+  __pycache__
+  *.pyc
+  .git
+  .github/workflows/*.yml
+  ai/patterns/graph-rag/mockup/*
