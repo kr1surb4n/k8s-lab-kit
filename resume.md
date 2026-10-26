@@ -4,11 +4,12 @@ Read this first when coming back. It is deliberately short and points at the
 details.
 
 - **Folder:** `/home/kris/00___Castle/07__WorkShops/k8s`
-- **Date:** 2026-10-25
-- **State:** **Phases 0–16 done; Phase 17 (Graph RAG) and Phase 18 (cloud) open**
+- **Date:** 2026-10-26
+- **State:** **Phases 0–16 done; Phase 17 scaffold imported but not built; Phase 18 open**
 - **Git:** repository on `main`; conventional commits, one change per commit
 - **Offline gate:** `make test` → **36 passed, 0 failed**
-- **Cluster:** minikube running (docker driver); `observability` namespace healthy
+- **Cluster:** minikube stopped at last snapshot; `observability` was healthy earlier
+- **Full snapshot:** `docs/REPO-STATE.md`
 
 ## One paragraph
 
@@ -52,8 +53,10 @@ free-tier experiment (18) are the remaining phases; see
 ## What is not done
 
 1. **Phase 17 — Graph RAG.** Corpus, pgvector/AGE schema, ingest, hybrid +
-   2-hop retrieval, rerank, eval harness, k8s packaging. The detailed checklist
-   is `analysis/07-what-to-do.md` §3.
+   2-hop retrieval, rerank, eval harness, k8s packaging. A cleaned scaffold was
+   imported from the abandoned capital-S copy and is marked in
+   `ai/patterns/graph-rag/PROVENANCE.md`; it is mock-only, so the phase itself
+   is still open. The detailed checklist is `analysis/07-what-to-do.md` §3.
 2. **Phase 18 — cloud free tier.** Plan-only until an account is provided; the
    deliverable is provider docs, Terraform validated with `terraform plan`, the
    A6 overlay, and a teardown checklist.
