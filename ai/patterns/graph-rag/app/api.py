@@ -34,6 +34,7 @@ class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     corpus: str = Field(default="notes,papers", max_length=100)
     k: int = Field(default=8, ge=1, le=50)
+    graph_hops: int | None = Field(default=None, ge=1, le=2)
     stub: bool = False
 
 
@@ -42,6 +43,7 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     corpus: str = Field(default="notes,papers", max_length=100)
     top_k: int | None = Field(default=None, ge=1, le=30)
+    graph_hops: int | None = Field(default=None, ge=1, le=2)
     stub: bool = False
 
 
@@ -87,6 +89,7 @@ def api_search(request: SearchRequest) -> dict:
             corpus=request.corpus,
             k=request.k,
             stub=request.stub,
+            graph_hops=request.graph_hops,
         )
     except OllamaError as exc:
         raise HTTPException(status_code=502, detail=f"model error: {exc}") from exc
@@ -106,6 +109,7 @@ def api_ask(request: AskRequest) -> dict:
             corpus=request.corpus,
             top_k=request.top_k,
             stub=request.stub,
+            graph_hops=request.graph_hops,
         )
     except OllamaError as exc:
         raise HTTPException(status_code=502, detail=f"model error: {exc}") from exc

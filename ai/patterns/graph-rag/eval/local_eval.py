@@ -77,7 +77,9 @@ def graph_path_score(expected: list[dict], actual: list[dict]) -> float:
 
 
 # Run one golden question through the local answer pipeline.
-def evaluate_one(settings, dsn: str, golden: dict, stub: bool) -> dict:
+def evaluate_one(
+    settings, dsn: str, golden: dict, stub: bool, graph_hops: int | None = None
+) -> dict:
     started = time.time()
     result = answer(
         settings,
@@ -86,6 +88,7 @@ def evaluate_one(settings, dsn: str, golden: dict, stub: bool) -> dict:
         corpus="lab",
         top_k=settings.answer_top_k,
         stub=stub,
+        graph_hops=graph_hops,
     )
     latency = int((time.time() - started) * 1000)
     answer_text = result["answer"]
@@ -209,6 +212,9 @@ def main() -> int:
     parser.add_argument("--config", help="path to the private config.yaml")
     parser.add_argument("--db", default="eval", help="eval, private, or a DSN")
     parser.add_argument("--stub", action="store_true", help="offline stub generator")
+    parser.add_argument(
+        "--graph-hops", type=int, choices=[1, 2], help="one or two graph hops"
+    )
     parser.add_argument("--json-out", type=Path, help="write per-question results")
     args = parser.parse_args()
 
@@ -217,7 +223,7 @@ def main() -> int:
     golden = load_golden(args.golden)
     results = []
     for item in golden:
-        result = evaluate_one(settings, dsn, item, args.stub)
+        result = evaluate_one(settings, dsn, item, args.stub, args.graph_hops)
         results.append(result)
         status = "ok" if result["facts_ok"] else "fact-miss"
         if result["kind"] == "refusal":

@@ -29,6 +29,8 @@ chunk_overlap: 50
 vector_top_k: 30
 lexical_top_k: 30
 answer_top_k: 12
+# One hop is the default; 2 follows shared entities into other documents.
+graph_hops: 1
 
 # Document sources. Corpus names are fixed: notes and papers.
 sources:

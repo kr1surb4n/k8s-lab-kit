@@ -1,0 +1,11 @@
+# Graph RAG examples
+
+Each file is a self-contained, runnable increment. They add to the same local
+application and use the same eval database; none of them needs private notes.
+
+| Example | What it demonstrates | Default |
+|---|---|---|
+| [Two-hop graph expansion](two-hop-graph-expansion.md) | Follow a shared entity from the retrieved documents into one other document | Off (`graph_hops: 1`) |
+
+The main setup is in [`../app/README.md`](../app/README.md). Run commands from
+`ai/patterns/graph-rag` unless a page says otherwise.

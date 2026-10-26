@@ -96,6 +96,10 @@ they use the local LLM.
 .venv/bin/python -m app.cli search "graph neural network datasets" --k 5
 .venv/bin/python -m app.cli ask "Which papers discuss layout analysis?"
 
+# Follow a shared entity from the retrieved documents into another document.
+.venv/bin/python -m app.cli search "How is a Service connected to Pods?" \
+  --corpus lab --graph-hops 2
+
 # The evaluation corpus is in the eval database.
 .venv/bin/python -m app.cli ask "How do Deployments relate to Pods?" --corpus lab
 ```
@@ -201,8 +205,10 @@ the golden labels.
   private config raises the notes limit to 30 MB so large SingleFile pages fit;
   raise it further only for a file you trust.
 - Image-only PDFs produce little or no text; OCR is not part of this phase.
-- Graph context is one hop: edges attached to the top retrieved documents. It
-  does not yet walk shared topic nodes into other documents.
+- Graph context is one hop by default: edges attached to the top retrieved
+  documents. `--graph-hops 2` or `graph_hops: 2` follows one shared entity into
+  another document and marks the bridge with `via`. It is not an arbitrary
+  graph walk.
 - Filtered HNSW search can miss a small corpus when the global nearest vectors
   belong to a larger one, so `search` forces an exact vector scan. That is fast
   at 26k chunks; revisit it above roughly a million vectors.

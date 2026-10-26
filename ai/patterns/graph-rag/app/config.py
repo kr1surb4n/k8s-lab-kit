@@ -76,6 +76,7 @@ class Settings:
     vector_top_k: int = 30
     lexical_top_k: int = 30
     answer_top_k: int = 12
+    graph_hops: int = 1
 
     # Return the DSN for a named database.
     def dsn(self, name: str) -> str:
@@ -129,4 +130,5 @@ def load_settings(path: Path | None = None) -> Settings:
         vector_top_k=int(data.get("vector_top_k", Settings.vector_top_k)),
         lexical_top_k=int(data.get("lexical_top_k", Settings.lexical_top_k)),
         answer_top_k=int(data.get("answer_top_k", Settings.answer_top_k)),
+        graph_hops=int(data.get("graph_hops", Settings.graph_hops)),
     )

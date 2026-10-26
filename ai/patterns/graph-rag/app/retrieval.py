@@ -142,32 +142,15 @@ def rrf_fuse(
     return sorted(fused.values(), key=lambda item: item["rrf"], reverse=True)
 
 
-# Return graph edges attached to the retrieved documents, best first.
-def graph_context(
-    conn: psycopg.Connection,
-    document_ids: list[str],
-    limit: int = 30,
-    query: str = "",
-) -> list[dict[str, Any]]:
-    if not document_ids:
-        return []
-    rows = conn.execute(
-        """
-        SELECT g.id, g.kind, g.arity, g.document_id, en.role, n.name, en.position
-        FROM edges g
-        JOIN edge_nodes en ON en.edge_id = g.id
-        JOIN nodes n ON n.id = en.node_id
-        WHERE g.document_id = ANY(%s)
-        ORDER BY g.id, en.position
-        LIMIT %s
-        """,
-        (document_ids, limit * 20),
-    ).fetchall()
+# Split the question into lower-case tokens for graph ranking.
+def _query_tokens(query: str) -> set[str]:
+    return {token.casefold() for token in re.findall(r"[\wąćęłńóśźż]+", query)}
 
-    rank_by_doc = {doc_id: rank for rank, doc_id in enumerate(document_ids)}
-    query_tokens = {token.casefold() for token in re.findall(r"[\wąćęłńóśźż]+", query)}
+
+# Collect database rows into edge dictionaries, keeping the node ids for hops.
+def _collect_edges(rows, rank_by_doc: dict[str, int]) -> dict[str, dict[str, Any]]:
     edges: dict[str, dict[str, Any]] = {}
-    for edge_id, kind, arity, document_id, role, name, position in rows:
+    for edge_id, kind, arity, document_id, role, node_id, name, _position in rows:
         edge = edges.setdefault(
             edge_id,
             {
@@ -178,43 +161,136 @@ def graph_context(
                 "doc_rank": rank_by_doc.get(document_id, 99),
                 "members": [],
                 "roles": {},
+                "node_ids": {},
             },
         )
         edge["members"].append(name)
         edge["roles"].setdefault(role, name)
+        edge["node_ids"].setdefault(node_id, name)
+    return edges
 
-    # Score an edge by document rank and overlap with the question.
-    def edge_key(edge: dict[str, Any]) -> tuple:
-        overlap = sum(
-            1
-            for member in edge["members"]
-            if any(token in member.casefold() for token in query_tokens)
+
+# Score an edge by document rank, question overlap, and relation size.
+def _edge_key(edge: dict[str, Any], query_tokens: set[str]) -> tuple:
+    overlap = sum(
+        1
+        for member in edge["members"]
+        if any(token in member.casefold() for token in query_tokens)
+    )
+    return (overlap > 0, -edge["doc_rank"], -edge["arity"], edge["relation"])
+
+
+# Convert an internal edge into the public graph-path shape.
+def _graph_entry(edge: dict[str, Any], hop: int, via: str | None = None) -> dict[str, Any]:
+    if edge["arity"] >= 3:
+        entry = {
+            "relation": edge["relation"],
+            "members": edge["members"],
+            "document_id": edge["document_id"],
+            "hop": hop,
+        }
+    else:
+        entry = {
+            "source": edge["roles"].get("source", edge["members"][0]),
+            "relation": edge["relation"],
+            "target": edge["roles"].get("target", edge["members"][-1]),
+            "document_id": edge["document_id"],
+            "hop": hop,
+        }
+    if via:
+        entry["via"] = via
+    return entry
+
+
+# Fetch one-hop edges from the retrieved documents.
+def _first_hop(conn: psycopg.Connection, document_ids: list[str], limit: int) -> list:
+    return conn.execute(
+        """
+        SELECT g.id, g.kind, g.arity, g.document_id, en.role, en.node_id, n.name, en.position
+        FROM edges g
+        JOIN edge_nodes en ON en.edge_id = g.id
+        JOIN nodes n ON n.id = en.node_id
+        WHERE g.document_id = ANY(%s)
+        ORDER BY g.id, en.position
+        LIMIT %s
+        """,
+        (document_ids, limit * 20),
+    ).fetchall()
+
+
+# Fetch edges from other documents that share a bridge node with the first hop.
+def _second_hop(
+    conn: psycopg.Connection,
+    bridge_ids: list[str],
+    document_ids: list[str],
+    limit: int,
+) -> list:
+    if not bridge_ids:
+        return []
+    return conn.execute(
+        """
+        SELECT g.id, g.kind, g.arity, g.document_id, en.role, en.node_id, n.name, en.position
+        FROM edges g
+        JOIN edge_nodes en ON en.edge_id = g.id
+        JOIN nodes n ON n.id = en.node_id
+        WHERE en.node_id = ANY(%s)
+          AND NOT (g.document_id = ANY(%s))
+        ORDER BY g.id, en.position
+        LIMIT %s
+        """,
+        (bridge_ids, document_ids, limit * 20),
+    ).fetchall()
+
+
+# Return graph edges attached to the retrieved documents, best first.
+def graph_context(
+    conn: psycopg.Connection,
+    document_ids: list[str],
+    limit: int = 30,
+    query: str = "",
+    hops: int = 1,
+) -> list[dict[str, Any]]:
+    if not document_ids or hops < 1:
+        return []
+    hops = min(hops, 2)
+    rank_by_doc = {doc_id: rank for rank, doc_id in enumerate(document_ids)}
+    tokens = _query_tokens(query)
+    edges = _collect_edges(_first_hop(conn, document_ids, limit), rank_by_doc)
+    ranked = sorted(edges.values(), key=lambda edge: _edge_key(edge, tokens), reverse=True)
+    first = [edge for edge in ranked if len(edge["members"]) >= 2][:limit]
+    result = [_graph_entry(edge, 1) for edge in first]
+
+    # A second hop starts at entities shared with the first-hop documents.
+    if hops >= 2 and first:
+        bridge_names: dict[str, str] = {}
+        for edge in first:
+            for node_id, name in edge["node_ids"].items():
+                bridge_names.setdefault(node_id, name)
+        # Keep the bridge set small; the highest-ranked edges are the anchors.
+        bridge_ids = list(bridge_names)[:40]
+        bridge_rank = {node_id: rank for rank, node_id in enumerate(bridge_ids)}
+        second_by_id = _collect_edges(
+            _second_hop(conn, bridge_ids, document_ids, limit), rank_by_doc
         )
-        return (overlap > 0, -edge["doc_rank"], -edge["arity"], edge["relation"])
-
-    result = []
-    for edge in sorted(edges.values(), key=edge_key, reverse=True)[:limit]:
-        if len(edge["members"]) < 2:
-            continue
-        if edge["arity"] >= 3:
-            result.append(
-                {
-                    "relation": edge["relation"],
-                    "members": edge["members"],
-                    "document_id": edge["document_id"],
-                    "hop": 1,
-                }
-            )
-        else:
-            result.append(
-                {
-                    "source": edge["roles"].get("source", edge["members"][0]),
-                    "relation": edge["relation"],
-                    "target": edge["roles"].get("target", edge["members"][-1]),
-                    "document_id": edge["document_id"],
-                    "hop": 1,
-                }
-            )
+        second_edges = sorted(
+            second_by_id.values(),
+            key=lambda edge: _edge_key(edge, tokens),
+            reverse=True,
+        )
+        seen = {edge["id"] for edge in first}
+        added = 0
+        second_limit = max(3, limit // 3)
+        for edge in second_edges:
+            if edge["id"] in seen or len(edge["members"]) < 2:
+                continue
+            # Prefer the best-ranked shared entity as the explainable bridge.
+            shared = [node_id for node_id in edge["node_ids"] if node_id in bridge_rank]
+            via = bridge_names[min(shared, key=bridge_rank.get)] if shared else None
+            result.append(_graph_entry(edge, 2, via=via))
+            seen.add(edge["id"])
+            added += 1
+            if added >= second_limit:
+                break
     return result
 
 
@@ -227,8 +303,10 @@ def search(
     k: int = 8,
     stub: bool = False,
     with_graph: bool = True,
+    graph_hops: int | None = None,
 ) -> dict[str, Any]:
     corpora = corpora_list(corpus)
+    graph_hops = 2 if (graph_hops or settings.graph_hops) >= 2 else 1
     embedder = StubEmbedder() if stub else OllamaClient(settings.ollama_url)
     started = time.time()
     with connect(dsn) as conn:
@@ -245,7 +323,9 @@ def search(
 
         document_ids = list(dict.fromkeys(item["doc_id"] for item in top))[:5]
         graph_path = (
-            graph_context(conn, document_ids, query=query) if with_graph else []
+            graph_context(conn, document_ids, query=query, hops=graph_hops)
+            if with_graph
+            else []
         )
 
     return {
@@ -269,6 +349,7 @@ def search(
             for item in top
         ],
         "graph_path": graph_path,
+        "graph_hops": graph_hops if with_graph else 0,
         "embed_model": "stub-hash-1024" if stub else settings.embed_model,
         "latency_ms": int((time.time() - started) * 1000),
     }
@@ -305,12 +386,21 @@ def answer(
     corpus: str | None = None,
     top_k: int | None = None,
     stub: bool = False,
+    graph_hops: int | None = None,
 ) -> dict[str, Any]:
     top_k = top_k or settings.answer_top_k
+    graph_hops = graph_hops or settings.graph_hops
     trace_id = secrets.token_hex(16)
     started = time.time()
     retrieved = search(
-        settings, dsn, question, corpus=corpus, k=top_k, stub=stub, with_graph=True
+        settings,
+        dsn,
+        question,
+        corpus=corpus,
+        k=top_k,
+        stub=stub,
+        with_graph=True,
+        graph_hops=graph_hops,
     )
     chunks = retrieved["chunks"]
     top_score = max((chunk["vector_score"] for chunk in chunks), default=0.0)
@@ -329,6 +419,7 @@ def answer(
             "model_version": "stub-hash-1024" if stub else settings.generate_model,
             "latency_ms": int((time.time() - started) * 1000),
             "refused": True,
+            "graph_hops": retrieved["graph_hops"],
         }
         _log(response, question)
         return response
@@ -384,6 +475,7 @@ def answer(
         "model_version": "stub-hash-1024" if stub else settings.generate_model,
         "latency_ms": int((time.time() - started) * 1000),
         "refused": refused,
+        "graph_hops": retrieved["graph_hops"],
     }
     _log(response, question)
     return response

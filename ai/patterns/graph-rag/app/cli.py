@@ -25,10 +25,16 @@ def print_search(result: dict[str, Any]) -> None:
     if graph:
         print(f"graph: {len(graph)} relation(s)")
         for edge in graph[:10]:
+            suffix = f" (hop {edge.get('hop', 1)}" + (
+                f", via {edge['via']}" if edge.get("via") else ""
+            ) + ")"
             if "members" in edge:
-                print(f"  ({', '.join(edge['members'])}) --{edge['relation']}-->")
+                print(f"  ({', '.join(edge['members'])}) --{edge['relation']}-->{suffix}")
             else:
-                print(f"  {edge['source']} --{edge['relation']}--> {edge['target']}")
+                print(
+                    f"  {edge['source']} --{edge['relation']}--> "
+                    f"{edge['target']}{suffix}"
+                )
 
 
 # Print an answer with its citations.
@@ -105,6 +111,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         corpus=args.corpus,
         k=args.k,
         stub=args.stub,
+        graph_hops=args.graph_hops,
     )
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -124,6 +131,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
         corpus=args.corpus,
         top_k=args.top_k,
         stub=args.stub,
+        graph_hops=args.graph_hops,
     )
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -190,6 +198,9 @@ def main(argv: list[str] | None = None) -> int:
     search_cmd.add_argument("--corpus", default="notes,papers")
     search_cmd.add_argument("--db")
     search_cmd.add_argument("--k", type=int, default=8)
+    search_cmd.add_argument(
+        "--graph-hops", type=int, choices=[1, 2], help="one or two graph hops"
+    )
     search_cmd.add_argument("--stub", action="store_true")
     search_cmd.add_argument("--json", action="store_true")
     search_cmd.set_defaults(func=cmd_search)
@@ -199,6 +210,9 @@ def main(argv: list[str] | None = None) -> int:
     ask.add_argument("--corpus", default="notes,papers")
     ask.add_argument("--db")
     ask.add_argument("--top-k", type=int)
+    ask.add_argument(
+        "--graph-hops", type=int, choices=[1, 2], help="one or two graph hops"
+    )
     ask.add_argument("--stub", action="store_true")
     ask.add_argument("--json", action="store_true")
     ask.set_defaults(func=cmd_ask)

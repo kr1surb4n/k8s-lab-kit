@@ -1,7 +1,38 @@
 """Retrieval helper tests that do not need a database."""
 import unittest
 
-from app.retrieval import build_context, corpora_list, find_citations, rrf_fuse
+from app.retrieval import (
+    build_context,
+    corpora_list,
+    find_citations,
+    graph_context,
+    rrf_fuse,
+)
+
+
+# Small query result that returns prepared rows and records the SQL it saw.
+class _Result:
+    def __init__(self, rows):
+        self.rows = rows
+
+    # Return the prepared rows.
+    def fetchall(self):
+        return self.rows
+
+
+# Fake connection for graph-context tests; no Postgres is started.
+class _GraphConn:
+    def __init__(self, first, second):
+        self.first = first
+        self.second = second
+        self.sql = []
+
+    # Give the first-hop or second-hop rows depending on the query.
+    def execute(self, sql, params):
+        self.sql.append(sql)
+        if "en.node_id = ANY" in sql:
+            return _Result(self.second)
+        return _Result(self.first)
 
 
 class RetrievalTests(unittest.TestCase):
@@ -43,6 +74,32 @@ class RetrievalTests(unittest.TestCase):
             text, {chunk_id, "doc-01#c0002", "doc-01#c0003"}
         )
         self.assertEqual(found, [chunk_id, "doc-01#c0002"])
+
+    def test_graph_context_second_hop_uses_shared_bridge(self):
+        first = [
+            ("e1", "RUNS_ON", 2, "doc-01", "source", "n:pod", "Pod", 1),
+            ("e1", "RUNS_ON", 2, "doc-01", "target", "n:node", "Node", 2),
+        ]
+        second = [
+            ("e2", "USES", 2, "doc-02", "source", "n:node", "Node", 1),
+            ("e2", "USES", 2, "doc-02", "target", "n:network", "Network", 2),
+        ]
+        conn = _GraphConn(first, second)
+        path = graph_context(conn, ["doc-01"], query="How does a Node work?", hops=2)
+        self.assertEqual([edge["hop"] for edge in path], [1, 2])
+        self.assertEqual(path[1]["via"], "Node")
+        self.assertEqual(path[1]["document_id"], "doc-02")
+        self.assertEqual(len(conn.sql), 2)
+
+    def test_graph_context_one_hop_does_not_query_second_hop(self):
+        first = [
+            ("e1", "RUNS_ON", 2, "doc-01", "source", "n:pod", "Pod", 1),
+            ("e1", "RUNS_ON", 2, "doc-01", "target", "n:node", "Node", 2),
+        ]
+        conn = _GraphConn(first, [])
+        path = graph_context(conn, ["doc-01"], hops=1)
+        self.assertEqual(len(path), 1)
+        self.assertEqual(len(conn.sql), 1)
 
 
 if __name__ == "__main__":
