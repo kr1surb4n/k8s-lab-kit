@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: php-app
+  namespace: phase3
+  labels:
+    app: php-app
+    phase: phase3
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: php-app
+  template:
+    metadata:
+      labels:
+        app: php-app
+        phase: phase3
+    spec:
+      containers:
+        - name: php
+          image: php:8.2-apache
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            - name: php-code
+              mountPath: /var/www/html
+              readOnly: true
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: php-code
+          configMap:
+            name: php-app-config
+            items:
+              - key: index.php
+                path: index.php
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: php-app
+  namespace: phase3
+  labels:
+    app: php-app
+    phase: phase3
+spec:
+  type: NodePort
+  selector:
+    app: php-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+      nodePort: 30081

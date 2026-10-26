@@ -1,0 +1,27 @@
+# MySQL values for Phase 3 - Minimal resources for minikube
+auth:
+  rootPassword: "rootpassword"
+  username: "appuser"
+  password: "apppassword"
+  database: "k8s_lab"
+  createDatabase: true
+
+architecture: standalone
+
+primary:
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+  persistence:
+    size: 5Gi
+    storageClass: standard
+
+metrics:
+  enabled: false
+
+volumePermissions:
+  enabled: true

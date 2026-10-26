@@ -1,0 +1,33 @@
+# MySQL values for Phase 3 - Minimal resources for minikube with latest stable image
+auth:
+  rootPassword: "rootpassword"
+  username: "appuser"
+  password: "apppassword"
+  database: "k8s_lab"
+  createDatabase: true
+
+architecture: standalone
+
+primary:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "250m"
+      memory: "512Mi"
+  persistence:
+    size: 2Gi
+    storageClass: standard
+
+image:
+  registry: docker.io
+  repository: bitnami/mysql
+  tag: "9.4"
+  pullPolicy: IfNotPresent
+
+metrics:
+  enabled: false
+
+volumePermissions:
+  enabled: true

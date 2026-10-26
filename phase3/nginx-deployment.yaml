@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-static
+  namespace: phase3
+  labels:
+    app: nginx-static
+    phase: phase3
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-static
+  template:
+    metadata:
+      labels:
+        app: nginx-static
+        phase: phase3
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            - name: static-content
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: static-content
+          configMap:
+            name: nginx-static-content
+            items:
+              - key: index.html
+                path: index.html
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-static
+  namespace: phase3
+  labels:
+    app: nginx-static
+    phase: phase3
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx-static
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP

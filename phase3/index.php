@@ -1,0 +1,85 @@
+<?php
+$host = 'mysql';
+$dbname = 'k8s_lab';
+$username = 'appuser';
+$password = 'apppassword';
+
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    $pdo->exec("CREATE TABLE IF NOT EXISTS visits (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        visit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        client_ip VARCHAR(45)
+    )");
+    
+    $stmt = $pdo->prepare("INSERT INTO visits (client_ip) VALUES (?)");
+    $stmt->execute([$_SERVER['REMOTE_ADDR'] ?? 'unknown']);
+    
+    $stmt = $pdo->query("SELECT COUNT(*) as count FROM visits");
+    $count = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+    
+    echo "<!DOCTYPE html>
+    <html lang='en'>
+    <head>
+        <meta charset='UTF-8'>
+        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+        <title>PHP + MySQL on Kubernetes</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+            .container { background: white; border-radius: 12px; padding: 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+            h1 { color: #333; margin-bottom: 10px; }
+            .subtitle { color: #666; margin-bottom: 30px; }
+            .info { background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; }
+            .info h3 { margin-top: 0; color: #444; }
+            .badge { display: inline-block; background: #28a745; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; margin: 4px; }
+            .counter { font-size: 48px; font-weight: bold; color: #28a745; text-align: center; margin: 20px 0; }
+            .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #888; font-size: 14px; }
+        </style>
+    </head>
+    <body>
+        <div class='container'>
+            <h1>🐘 PHP + MySQL on Kubernetes</h1>
+            <p class='subtitle'>Phase 3: Magento-style stack on minikube</p>
+            
+            <div class='info'>
+                <h3>✅ Database Connection</h3>
+                <p>Successfully connected to MySQL database <strong>k8s_lab</strong></p>
+            </div>
+            
+            <div class='info'>
+                <h3>📊 Visit Counter</h3>
+                <div class='counter'>{$count}</div>
+                <p style='text-align: center; color: #666;'>Total visits to this page</p>
+            </div>
+            
+            <div class='info'>
+                <h3>🏗️ Architecture</h3>
+                <span class='badge'>PHP-FPM</span>
+                <span class='badge'>MySQL 8.0</span>
+                <span class='badge'>StatefulSet</span>
+                <span class='badge'>ConfigMap</span>
+            </div>
+            
+            <div class='info'>
+                <h3>🎯 Phase 3 Progress</h3>
+                <ul>
+                    <li>✅ Minikube running (Kubernetes v1.37.0)</li>
+                    <li>✅ nginx serving static page (Task 3a)</li>
+                    <li>✅ MySQL database running (Task 3b)</li>
+                    <li>✅ PHP app connecting to MySQL (Task 3b)</li>
+                    <li>✅ Visit counter persisted in database</li>
+                </ul>
+            </div>
+            
+            <div class='footer'>
+                Kubernetes Lab Kit - github.com/kr1surb4n/k8s-lab-kit
+            </div>
+        </div>
+    </body>
+    </html>";
+} catch (PDOException $e) {
+    echo "<h1>Database Connection Failed</h1><p>Error: " . $e->getMessage() . "</p>";
+}
+?>
