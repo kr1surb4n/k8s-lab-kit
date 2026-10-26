@@ -1,0 +1,78 @@
+# Graph RAG API manifests; the Deployment below is complete on its own.
+# Imported scaffold — see ../PROVENANCE.md before using it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - configmap.yaml
+  - secret.yaml
+  - rbac.yaml
+  - hpa.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: graph-rag-api
+    includeSelectors: true
+    includeTemplates: true
+
+namespace: k8s-lab
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: boilerplate/graph-rag-api:1.0
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 8000
+      - op: replace
+        path: /spec/template/spec/containers/0/name
+        value: graph-rag-api
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: 8000
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: 8000
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: APP_NAME
+            value: "graph-rag-api"
+          - name: APP_ENV
+            value: "lab"
+          - name: VERSION
+            value: "1.0.0"
+          - name: OTLP_ENDPOINT
+            value: "http://otel-collector-opentelemetry-collector.observability:4318/v1/traces"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "8Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "4Gi"
+      - op: add
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          nvidia.com/gpu: "1"
+      - op: add
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          nvidia.com/gpu: "1"
+    target:
+      kind: Deployment
+
+  - patch: |-
+      - op: replace
+        path: /spec/ports/0/targetPort
+        value: 8000
+      - op: replace
+        path: /spec/ports/0/port
+        value: 80
+    target:
+      kind: Service

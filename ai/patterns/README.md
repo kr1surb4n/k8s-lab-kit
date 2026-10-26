@@ -7,7 +7,8 @@ module with: contract (API), mockup (demo), k8s manifests, failure modes, and ev
 
 ```
 ai/patterns/
-├── rag/              # Retrieval-Augmented Generation
+├── rag/              # Retrieval-Augmented Generation (working baseline)
+├── graph-rag/        # RAG + knowledge graph (imported scaffold, see its PROVENANCE.md)
 ├── router/           # Semantic/model routing
 ├── agent/            # Tool-using agents
 ├── eval/             # Evaluation harness
@@ -50,6 +51,7 @@ make clean          # removes resources
 | Pattern | Use Case | Complexity | Depends On |
 |---------|----------|------------|------------|
 | `rag` | Q&A over docs, code search | Medium | vector-store, embedding, rerank |
+| `graph-rag` | Multi-hop Q&A with entity relations | High | rag, vector-store |
 | `router` | Cost/quality routing | Low | eval |
 | `agent` | Multi-step tool use | High | router, eval, guardrail |
 | `eval` | Automated quality gates | Medium | - |

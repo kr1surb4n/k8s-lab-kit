@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: graph-rag-api
+  namespace: k8s-lab
+  labels:
+    app.kubernetes.io/name: graph-rag-api
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: graph-rag-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graph-rag-api-headless
+  namespace: k8s-lab
+  labels:
+    app.kubernetes.io/name: graph-rag-api
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: graph-rag-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
