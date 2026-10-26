@@ -54,12 +54,16 @@ def resolve_dsn(settings: Settings, name: str) -> str:
 
 
 # Reject a private corpus in the evaluation database.
-def guard_corpus_db(corpus: str, db_name: str) -> None:
-    if corpus in PRIVATE_CORPORA and db_name == "eval":
+def guard_corpus_db(corpus: str, db_name: str, dsn: str, settings: Settings) -> None:
+    # Compare the resolved DSN as well, so an explicit eval URL cannot bypass
+    # the name check.
+    if corpus in PRIVATE_CORPORA and (
+        db_name == "eval" or dsn == settings.dsn("eval")
+    ):
         raise SystemExit(
             f"{corpus} holds private documents and must use the private database"
         )
-    if corpus == "lab" and db_name == "private":
+    if corpus == "lab" and (db_name == "private" or dsn == settings.dsn("private")):
         raise SystemExit("the lab evaluation corpus belongs in the eval database")
 
 
@@ -67,7 +71,8 @@ def guard_corpus_db(corpus: str, db_name: str) -> None:
 def cmd_ingest(args: argparse.Namespace) -> int:
     settings = load_settings(args.config)
     db_name = args.db or DEFAULT_DB_FOR_CORPUS.get(args.corpus, "private")
-    guard_corpus_db(args.corpus, db_name)
+    dsn = resolve_dsn(settings, db_name)
+    guard_corpus_db(args.corpus, db_name, dsn, settings)
     extract_mode = args.extract
     if extract_mode == "auto":
         extract_mode = "tags" if args.corpus == "papers" else "llm"
@@ -75,7 +80,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         extract_mode = "stub"
     result = ingest_corpus(
         settings,
-        resolve_dsn(settings, db_name),
+        dsn,
         args.corpus,
         limit=args.limit,
         stub=args.stub,
