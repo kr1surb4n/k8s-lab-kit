@@ -2,7 +2,8 @@
 
 This is the runnable Phase 17 application. It indexes the synthetic lab corpus
 for evaluation and, separately, local notes and research papers for daily use.
-The private index is never mixed with the evaluation database.
+The private index is never mixed with the evaluation database. 36 offline tests
+run without a GPU or database (`make app-test`).
 
 ## Two databases
 
@@ -59,6 +60,19 @@ delete documents whose files disappeared, and `--limit N` for a trial run.
 
 PDF text is cached under `~/.cache/graphrag/pdf-text/` and keyed by path, size,
 and modification time, so re-runs do not re-extract 600 PDFs.
+
+### Current private index (2026-10-26)
+
+| Corpus | Documents | Chunks | Embeddings | Edges |
+|---|---:|---:|---:|---:|
+| `notes` | 179 | 1,608 | 1,608 | 1,204 |
+| `papers` | 861 | 24,745 | 24,745 | 7,021 |
+
+The notes index includes PDFs, DOCX, Markdown, text, and saved HTML. The paper
+index uses 634 full PDFs; the other 227 papers are summary-only. Unchanged
+re-runs process zero documents and finish in a few seconds.
+
+The lab evaluation index remains separate: 20 documents, 20 chunks, 218 edges.
 
 ### Extraction modes
 
@@ -146,6 +160,25 @@ with `gpt-oss:120b-cloud` by default; switch it to `granite3.3-8b-local` or
 paper excerpts will be sent to the cloud provider. The MCP tools strip absolute
 paths, but they necessarily return local text snippets to the agent.
 
+## Local evaluation baseline
+
+`make eval-local` runs the 42-question lab golden set against the real index.
+Latest run (2026-10-26, 40 answerable + 2 refusal questions):
+
+| Metric | Value |
+|---|---:|
+| Recall@k | 1.00 |
+| Citation precision | 0.75 |
+| Graph-path accuracy | 0.7875 |
+| Strict answer-fact match | 0.825 |
+| Refusal correctness | 1.00 |
+| Latency p50 / p95 | 2,364 ms / 3,266 ms |
+
+`facts_ok` is a strict substring check against the golden phrases, so it
+under-counts correct paraphrases. Graph-path accuracy uses exact relation and
+entity labels from the local model, which are often phrased differently from
+the golden labels.
+
 ## Privacy
 
 - Everything is local: Ollama at `localhost:11434`, Postgres on localhost, no
@@ -164,8 +197,14 @@ paths, but they necessarily return local text snippets to the agent.
 - Papers without a summary JSON are indexed from their PDF text but get no tag
   graph. Summaries without a PDF are still indexed from title, summary, and
   tags.
+- Files larger than `max_file_bytes` are skipped with `skip (too large)`. The
+  private config raises the notes limit to 30 MB so large SingleFile pages fit;
+  raise it further only for a file you trust.
 - Image-only PDFs produce little or no text; OCR is not part of this phase.
 - Graph context is one hop: edges attached to the top retrieved documents. It
   does not yet walk shared topic nodes into other documents.
+- Filtered HNSW search can miss a small corpus when the global nearest vectors
+  belong to a larger one, so `search` forces an exact vector scan. That is fast
+  at 26k chunks; revisit it above roughly a million vectors.
 - The API loads configuration at import time. Restart it after editing
   `config.yaml`.

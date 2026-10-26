@@ -47,7 +47,8 @@ sources:
       - "zip/**"
       - "**/__pycache__/**"
       - "**/.git/**"
-    max_file_bytes: 20000000
+    # 30 MB accommodates large single-file web pages; lower it for a stricter default.
+    max_file_bytes: 30000000
     min_words: 15
 
   papers:

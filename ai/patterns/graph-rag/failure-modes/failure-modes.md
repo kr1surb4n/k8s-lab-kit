@@ -1,70 +1,35 @@
-# Graph RAG Failure Modes — known issues and mitigations
+# Graph RAG failure modes — observed issues and mitigations
 
-| # | Symptom | Root Cause | Detection | Mitigation | Priority |
-|---|---------|------------|-----------|------------|----------|
-| 1 | Low graph path accuracy | Entity extraction missing / NER errors | Evaluation Graph Path Acc < 0.80 | Improve NER model; add manual curation; validate entities at ingest | P0 |
-| 2 | Graph expansion timeout | Too many hops / large subgraph | `graph_expand_latency_seconds` p99 > 5s | Limit hops to 2; add timeout; limit subgraph size | P1 |
-| 3 | AGE extension missing | PG extension not loaded | `CREATE EXTENSION age` fails; `SELECT * FROM ag_catalog.age_version()` fails | Ensure `CREATE EXTENSION age` in init script; add readiness check | P0 |
-| 4 | Cypher injection | User input in Cypher queries | Security audit finds injection | Parameterized queries only; validate/sanitize all inputs | P0 |
-| 5 | Graph bloat | Too many entities/relations over time | `SELECT count(*) FROM ag_catalog.ag_label` grows unbounded | TTL cleanup; entity dedup; archive old graphs | P2 |
-| 6 | Low graph path accuracy | Weak entity extraction / missing relations | Evaluation Graph Path Acc < 0.80 | Improve NER; add relation extraction; validate at ingest | P0 |
-| 7 | Hybrid search imbalance | One retriever dominates (BM25 vs vector) | RRF weights not working; inspect `fusion_scores` histogram | Tune RRF k parameter; add weight config; log per-retriever contribution | P2 |
-| 8 | Reranker timeout | Cross-encoder too slow for top-50 | `rerank_latency_seconds` p99 > 500ms | Reduce rerank candidates to top-20; use smaller reranker model; async rerank | P2 |
-| 7 | Generator repeats/loops | Temperature too high; no repetition penalty | Answer contains repeated phrases; `repetition_penalty` not set | Set `repetition_penalty=1.1`, `temperature=0.3`, `top_p=0.9` | P1 |
-| 8 | Context window overflow | Retrieved chunks + graph context too long | Truncation warnings in logs; answer cuts off | Enforce chunk size ≤ 512 tokens; limit total context to 3000 tokens | P1 |
-| 8 | Multi-tenant data leakage | Tenant A sees Tenant B docs/graph | Audit log shows cross-tenant `doc_id` in sources/graph_path | Enforce tenant_id filter in vector query AND Cypher; add row-level security | P0 |
-| 9 | PII leakage in graph | Entity extraction captures PII | Audit log shows SSN/email in graph entities | Tighten Presidio rules; add custom regex; filter entities at ingest | P0 |
-| 10 | GPU OOM | Model + graph context > VRAM | Pod `OOMKilled`; `nvidia-smi` shows 100% mem | Quantize to 4-bit GPTQ; reduce max_tokens; enable flash-attention | P0 |
+The implementation uses plain PostgreSQL tables, recursive CTEs, and pgvector.
+Apache AGE is not installed; the earlier AGE/Cypher rows in this file described
+a design that was not built.
 
-## Monitoring Alerts
+| # | Symptom | Root cause | Detection | Mitigation |
+|---|---------|------------|-----------|------------|
+| 1 | `extraction failed ... Expecting ',' delimiter` | Local model output hit `num_predict` mid-JSON | Ingest log line; document stored with text but no graph | Ollama JSON schema, bounded arrays, 900-token budget, one shorter retry |
+| 2 | `duplicate key ... edge_nodes_edge_id_position_key` | Same edge id reinserted with reversed member order | Ingest aborts on `UniqueViolation` | Directed pair edge ids; delete and reinsert members atomically. Fix: `892fa99` |
+| 3 | A crash lost hours of ingest | psycopg savepoints stayed inside one outer transaction | Row counts do not grow during a long run | Commit once per document and per prune. Fix: `7e403fb` |
+| 4 | Top-level notes missing | `fnmatch("note.md", "**/*.md")` is false | Compare source file count with `stats` | Leading `**/` also matches the source root. Fix: `a6fb773` |
+| 5 | A large saved web page is skipped | `max_file_bytes` guard | `skip (too large)` in the log | Raise `max_file_bytes` for the notes source (currently 30 MB) and rerun |
+| 6 | A PDF has almost no text | Image-only or scanned PDF; OCR is not installed | Very small chunk count for a large PDF | Keep the summary JSON text; add OCR in a later phase |
+| 7 | Low graph-path accuracy | Local model relation names and entity phrasing differ from the golden labels; context is one hop | `graph_path_accuracy` in `make eval-local` | Treat it as a model-quality metric, not a lookup; improve prompts or curate labels |
+| 8 | Polish keyword search is weak | `to_tsvector('english', ...)` has no Polish stemmer | Polish query with low lexical score | bge-m3 vector search carries the query; lexical results supplement it |
+| 9 | Private excerpts reach a cloud model | Hermes sends MCP tool results to its configured model (`gpt-oss:120b-cloud` by default) | Model/provider in the Hermes transcript | Use `granite3.3-8b-local` or `qwen3-8b-local`; MCP strips absolute paths and truncates snippets |
+| 10 | Notes could enter the evaluation database | A wrong `--db` or DSN | `stats` shows a private corpus in the eval DB | Separate database, volume, and port; CLI rejects private corpora in eval |
+| 11 | Stale documents after edits | Content hash changed or a file disappeared | `skipped` count in ingest output | `--prune` deletes missing files; `--force` rebuilds changed ones |
+| 12 | GPU out of memory | Too many models or a large context | `ollama ps`; Ollama error | One 8B model at a time, `num_ctx=4096`, 900 output tokens |
+| 13 | `PostgreSQL text fields cannot contain NUL` | A PDF or HTML file contains `0x00` bytes | Ingest aborts on `DataError` | `normalize_text` strips NUL; per-document commit resumes at the failed file |
+| 14 | A notes query returns no chunks while similar notes exist | HNSW filters `documents.corpus` after the index scan; top global neighbours can all be papers | Polish notes query returns `[]`; same query on an unfiltered scan returns rows | Force an exact vector scan at this index size. Revisit partial indexes or iterative HNSW above ~1M chunks |
 
-```yaml
-# PrometheusRule for Graph RAG
-- alert: GraphRAGLowGraphPathAccuracy
-  expr: graph_rag_graph_path_accuracy < 0.80
-  for: 5m
-  labels:
-    severity: critical
-  annotations:
-    summary: "Graph RAG graph path accuracy below 80%"
+## Local checks
 
-- alert: GraphRAGHighLatency
-  expr: histogram_quantile(0.99, graph_rag_latency_seconds) > 3
-  for: 5m
-  labels:
-    severity: warning
-  annotations:
-    summary: "Graph RAG p99 latency above 3s"
-
-- alert: GraphRAGLowRecall
-  expr: graph_rag_recall_at_5 < 0.85
-  for: 5m
-  labels:
-    severity: critical
-  annotations:
-    summary: "Graph RAG recall@5 below 85%"
-
-- alert: GraphRAGGPUOOM
-  expr: kube_pod_container_status_terminated_reason{pod=~"graph-rag-api.*",reason="OOMKilled"} > 0
-  for: 1m
-  labels:
-    severity: critical
-  annotations:
-    summary: "Graph RAG pod OOMKilled"
-
-- alert: AGEExtensionMissing
-  expr: up{job="postgres-age"} == 0
-  for: 1m
-  labels:
-    severity: critical
-  annotations:
-    summary: "Apache AGE PostgreSQL extension not available"
+```bash
+make app-test                 # 36 offline tests, no GPU or database
+make eval-local               # 42-question golden set against the eval DB
+.venv/bin/python -m app.cli stats
+curl -s localhost:8099/healthz | jq
 ```
 
-## Runbook Links
-
-- Low graph path accuracy → `docs/runbooks.md#graph-rag-low-graph-path-accuracy`
-- Graph expansion timeout → `docs/runbooks.md#graph-rag-expansion-timeout`
-- AGE extension missing → `docs/runbooks.md#graph-rag-age-missing`
-- Cypher injection → `docs/runbooks.md#graph-rag-cypher-injection`
-- PII in graph → `docs/runbooks.md#graph-rag-pii-leakage`
+The Kubernetes Prometheus alerts that used to be in this file were never
+deployed for the local tool. Do not copy them into a cluster without metrics
+exporters first.

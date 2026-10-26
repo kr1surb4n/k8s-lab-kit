@@ -4,7 +4,9 @@
 
 **When**: Complex queries requiring multi-step reasoning, entity disambiguation, citation tracing.
 
-**API Contract**: `POST /v1/graph-rag/query` → `{answer, sources[], graph_path[], trace_id, latency_ms}`
+**Target API Contract**: `POST /v1/graph-rag/query` → `{answer, sources[], graph_path[], trace_id, latency_ms}`
+
+**Local app**: `POST /v1/ask` → `{answer, citations[], graph_path[], scores, trace_id, prompt_version, model_version, latency_ms}`
 
 ## Architecture
 
@@ -46,18 +48,19 @@
 
 | Component | Technology | Config |
 |-----------|------------|--------|
-| Vector Embedding | `bge-m3-local` via Ollama (1024-dim) | batch=32, normalize=True |
-| Vector Store | PGVector (PostgreSQL 16) | HNSW, m=16, ef=64 |
-| BM25 | PostgreSQL tsvector | title^2 + body |
-| Hybrid Fusion | RRF (k=60) | α=0.5 |
+| Vector Embedding | `bge-m3-local` via Ollama (1024-dim) | normalized, batch=16 |
+| Vector Store | PGVector (PostgreSQL 16) | HNSW index exists; filtered queries use exact scan |
+| Lexical Search | PostgreSQL `ts_rank_cd` over tsvector | `english` config, no title weighting |
+| Hybrid Fusion | RRF (k=60) | vector top-30 + lexical top-30 |
 | Graph DB | Plain Postgres tables + recursive CTEs; Apache AGE optional | see the Phase 17 plan |
-| Reranker | LLM listwise via `granite3.3-8b-local` (default); optional `BAAI/bge-reranker-v2-m3` | top-20 → top-5 |
-| Generator | `granite3.3-8b-local` Q4_K_M (primary); `qwen3-8b-local` fallback | temp=0.2, num_ctx=8192 |
-| Guardrail | Presidio + custom | PII, toxicity, format |
+| Reranker | Not implemented in the local app; RRF order goes to the generator | deviation from the target design |
+| Generator | `granite3.3-8b-local` Q4_K_M (primary); `qwen3-8b-local` fallback | temp=0.1, num_ctx=8192, num_predict=500 |
+| Guardrail | Citation whitelist + retrieval-score refusal | no Presidio/toxicity filter yet |
 
-The component table is the Phase 17 target. The imported architecture diagram
-and schema still show Apache AGE; the implementation uses plain Postgres tables
-and recursive CTEs as the primary graph layer, with AGE as an optional adapter.
+The architecture diagram shows the original target shape. The local app
+implements hybrid retrieval, one-hop graph context, and generation; it does not
+rerank and does not use Apache AGE. The graph is plain Postgres tables and
+recursive CTEs.
 
 ## Local model setup
 
@@ -101,12 +104,56 @@ SHA-256 manifest and provenance for every document. The golden set in
 of it offline, including checking that every expected answer fact appears in the
 cited documents.
 
+## Local private knowledge base
 
-## Data Flow
+The runnable app in [`app/`](app/README.md) also indexes personal notes and a
+research-paper library. It uses a second database and volume so private data
+never touches the evaluation fixture:
+
+| Database | Port | Corpora |
+|---|---|---|
+| `graphrag` (eval) | 5433 | `lab` |
+| `graphrag_private` | 5434 | `notes`, `papers` |
+
+Current private index: 1,040 documents, 26,353 chunks, 8,225 edges
+(`notes` 179/1,608/1,204; `papers` 861/24,745/7,021). The lab index stays
+separate at 20 documents, 20 chunks, 218 edges. The latest local evaluation
+has recall@k 1.00, citation precision 0.75, strict fact match 0.825, and
+refusal correctness 1.00; details are in [`app/README.md`](app/README.md).
+
+Everything stays local: `bge-m3-local` embeddings and
+`granite3.3-8b-local` extraction through Ollama, Postgres with pgvector, no
+cloud calls. The same core is exposed three ways: CLI (`app/cli.py`), HTTP
+(`POST /v1/search`, `POST /v1/ask`), and an MCP stdio server for Hermes
+(`search_knowledge`, `ask_knowledge`, `list_corpora`).
+
+The MCP server is local, but the agent consuming it is not necessarily local.
+Hermes defaults to `gpt-oss:120b-cloud`; switch it to `granite3.3-8b-local` or
+`qwen3-8b-local` before asking private questions, or the retrieved snippets go
+to the cloud provider.
+
+Private paths and database passwords live in `~/.config/graphrag/config.yaml`
+(mode `0600`, git-ignored), never in this repository. See
+[`app/README.md`](app/README.md) for setup, indexing, and the extraction modes.
+
+```bash
+make venv
+make private-db-up private-migrate
+.venv/bin/python -m app.cli ingest notes
+.venv/bin/python -m app.cli ingest papers
+.venv/bin/python -m app.cli ask "What do my notes say about sleep and focus?"
+```
+
+## Target Data Flow (not the local app)
 
 1. **Ingest**: `POST /v1/graph-rag/ingest` → chunk → embed → upsert to PGVector + extract entities/relations → upsert to AGE
 2. **Query**: `POST /v1/graph-rag/query` → embed query → hybrid search (top-50) → graph expansion (2-hop) → rerank (top-5) → subgraph extraction → generate with graph context → guardrail → respond
 3. **Trace**: Every step emits OTel spans with `trace_id` propagated through all services
+
+The local app in `app/` implements a narrower flow: chunk → embed/extract →
+exact vector scan + Postgres lexical search → RRF → one-hop graph context →
+generate → citation whitelist. It does not use Apache AGE, two-hop expansion,
+a reranker, or OpenTelemetry.
 
 ## API
 
