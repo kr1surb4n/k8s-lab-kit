@@ -169,9 +169,15 @@ def page_map_for(path: Path) -> list[tuple[int, int]] | None:
 def is_included(relative: str, include: list[str], exclude: list[str]) -> bool:
     from fnmatch import fnmatch
 
-    if any(fnmatch(relative, pattern) for pattern in exclude):
+    # A leading **/ also matches files at the root of the source folder.
+    def matches(path: str, pattern: str) -> bool:
+        return fnmatch(path, pattern) or (
+            pattern.startswith("**/") and fnmatch(path, pattern[3:])
+        )
+
+    if any(matches(relative, pattern) for pattern in exclude):
         return False
-    return any(fnmatch(relative, pattern) for pattern in include)
+    return any(matches(relative, pattern) for pattern in include)
 
 
 # Walk a folder and yield supported, non-excluded files in a stable order.

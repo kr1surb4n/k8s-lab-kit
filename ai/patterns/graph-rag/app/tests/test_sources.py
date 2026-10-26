@@ -31,6 +31,7 @@ class SourceTests(unittest.TestCase):
         include = ["**/*.md", "**/*.txt"]
         exclude = ["My Games/**", "zip/**"]
         self.assertTrue(is_included("md/note.md", include, exclude))
+        self.assertTrue(is_included("note.md", include, exclude))
         self.assertTrue(is_included("txt/deep/note.txt", include, exclude))
         self.assertFalse(is_included("My Games/save.txt", include, exclude))
         self.assertFalse(is_included("zip/archive.txt", include, exclude))
