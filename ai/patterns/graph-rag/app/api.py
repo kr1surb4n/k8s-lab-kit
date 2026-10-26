@@ -16,6 +16,8 @@ from .llm import OllamaClient, OllamaError
 from .retrieval import answer, search
 
 LOGGER = logging.getLogger("graphrag.api")
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 SETTINGS = load_settings()
 PRIVATE_DSN = SETTINGS.dsn("private")
 EVAL_DSN = SETTINGS.dsn("eval")

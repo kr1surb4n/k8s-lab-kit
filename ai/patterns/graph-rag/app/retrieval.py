@@ -332,9 +332,14 @@ def answer(
             num_ctx=8192,
         ).strip()
 
-    # Only retrieved chunk ids may appear in citations.
+    # Only retrieved chunk ids may appear in citations. Strip sentence
+    # punctuation that the model may leave after a bare id.
     retrieved_ids = {chunk["chunk_id"] for chunk in chunks}
-    cited_ids = [match for match in CITATION_RE.findall(text) if match in retrieved_ids]
+    cited_ids = [
+        match.rstrip(".,:;!?)]}")
+        for match in CITATION_RE.findall(text)
+        if match.rstrip(".,:;!?)]}") in retrieved_ids
+    ]
     citations = []
     for chunk_id in dict.fromkeys(cited_ids):
         chunk = next(item for item in chunks if item["chunk_id"] == chunk_id)

@@ -13,11 +13,16 @@ Absolute paths are removed from tool results; doc ids and local snippets remain.
 """
 from __future__ import annotations
 
+import logging
+
 from mcp.server.mcpserver import MCPServer
 
 from .config import load_settings
 from .db import connect, corpus_stats
 from .retrieval import answer, search
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 SETTINGS = load_settings()
 PRIVATE_DSN = SETTINGS.dsn("private")
