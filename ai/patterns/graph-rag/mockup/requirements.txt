@@ -6,4 +6,4 @@ pydantic==2.7.1
 pydantic-settings==2.3.3
 opentelemetry-api==1.25.0
 opentelemetry-sdk==1.25.0
-opentelemetry-exporter-otlp-proto-http==1.25.0
+opentelemetry-exporter-otlp-proto-http==1.45.1
