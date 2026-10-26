@@ -285,7 +285,7 @@ def load_papers(source, limit: int | None = None) -> Iterator[SourceDocument]:
                 print(f"skip summary ({exc}): {path.name}", file=sys.stderr)
                 continue
             filename = data.get("filename")
-            if not filename or "?skip=" in filename:
+            if not isinstance(filename, str) or not filename or "?skip=" in filename:
                 continue
             summaries[filename] = data
 
@@ -299,15 +299,19 @@ def load_papers(source, limit: int | None = None) -> Iterator[SourceDocument]:
         if limit is not None and count >= limit:
             break
         data = summaries.get(filename, {})
-        summary = (data.get("summary") or "").strip()
+        summary_value = data.get("summary") or ""
+        summary = summary_value.strip() if isinstance(summary_value, str) else str(summary_value)
         tags = data.get("tags") or []
+        if isinstance(tags, str):
+            tags = [tags]
+        tags = [str(tag).strip() for tag in tags if str(tag).strip()]
         pdf_path = pdf_dir / filename
         pdf_text = ""
         page_map = None
         if pdf_path.exists():
             try:
                 pdf_text, page_map = read_pdf(pdf_path)
-            except (OSError, ValueError) as exc:
+            except Exception as exc:  # noqa: BLE001 - one bad PDF must not stop the run
                 print(f"skip pdf ({exc}): {pdf_path.name}", file=sys.stderr)
 
         text_parts = [paper_title(filename)]

@@ -250,6 +250,8 @@ def store_document(
                 """,
                 provenance_rows,
             )
+    # Each document is durable on its own so a long ingest resumes after a crash.
+    conn.commit()
 
 
 # Insert one pairwise edge or hyperedge and its members; return the edge id.
@@ -302,6 +304,7 @@ def prune_missing(conn: psycopg.Connection, corpus: str, keep_paths: set[str]) -
     with conn.transaction():
         for doc_id, _ in stale:
             conn.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
+    conn.commit()
     return [path for _, path in stale]
 
 
