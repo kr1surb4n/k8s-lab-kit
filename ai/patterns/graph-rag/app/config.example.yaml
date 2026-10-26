@@ -1,0 +1,59 @@
+# Example Graph RAG configuration.
+#
+# Copy this file to ~/.config/graphrag/config.yaml and edit the paths.
+# That private file holds personal paths and database passwords, so it must
+# stay outside the repository and be readable only by your user:
+#
+#   mkdir -p ~/.config/graphrag
+#   cp app/config.example.yaml ~/.config/graphrag/config.yaml
+#   chmod 600 ~/.config/graphrag/config.yaml
+#
+# Nothing in this example points at real private data.
+
+ollama_url: http://localhost:11434
+
+models:
+  embed: bge-m3-local
+  generate: granite3.3-8b-local
+  fallback: qwen3-8b-local
+
+# The eval database holds only the synthetic lab corpus. The private database
+# holds notes and papers. Keep them on different ports and volumes.
+databases:
+  eval: postgresql://graphrag:graphrag-dev-only@localhost:5433/graphrag
+  private: postgresql://graphrag:graphrag-private-dev-only@localhost:5434/graphrag_private
+
+# Chunking and retrieval defaults.
+chunk_words: 320
+chunk_overlap: 50
+vector_top_k: 30
+lexical_top_k: 30
+answer_top_k: 12
+
+# Document sources. Corpus names are fixed: notes and papers.
+sources:
+  notes:
+    kind: files
+    path: ~/Documents
+    include:
+      - "**/*.md"
+      - "**/*.txt"
+      - "**/*.html"
+      - "**/*.pdf"
+      - "**/*.docx"
+    exclude:
+      - "My Games/**"
+      - "NVIDIA Nsight Compute/**"
+      - "zip/**"
+      - "**/__pycache__/**"
+      - "**/.git/**"
+    max_file_bytes: 20000000
+    min_words: 15
+
+  papers:
+    kind: papers
+    path: ~/papers
+    pdf_dir: processed-pdfs
+    summaries_dir: analysis_results_per_file
+    include: []
+    exclude: []

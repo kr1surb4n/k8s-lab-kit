@@ -1,0 +1,356 @@
+"""Document loaders: the lab corpus, private notes, and the paper library."""
+from __future__ import annotations
+
+import hashlib
+import html
+import json
+import re
+import sys
+from dataclasses import dataclass, field
+from html.parser import HTMLParser
+from pathlib import Path
+from typing import Iterator
+
+import yaml
+
+CACHE_DIR = Path.home() / ".cache" / "graphrag" / "pdf-text"
+BLOCK_TAGS = {
+    "p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6",
+    "section", "article", "header", "footer", "pre", "blockquote",
+}
+SKIP_DIRS = {".git", ".hg", ".svn", "__pycache__", ".venv", "venv", "node_modules"}
+
+
+# One normalized document ready for chunking and ingestion.
+@dataclass
+class SourceDocument:
+    id: str
+    corpus: str
+    corpus_version: str
+    title: str
+    section: str
+    path: str
+    sha256: str
+    source: dict
+    text: str
+    page_map: list[tuple[int, int]] | None = field(default=None)
+
+
+# Strip HTML tags while keeping block boundaries and readable text.
+class _TextExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.skip = 0
+
+    # Start collecting or skipping text at script/style boundaries.
+    def handle_starttag(self, tag: str, attrs):
+        if tag in ("script", "style"):
+            self.skip += 1
+        elif tag in BLOCK_TAGS:
+            self.parts.append("\n")
+
+    # Stop skipping at the matching closing tag.
+    def handle_endtag(self, tag: str):
+        if tag in ("script", "style") and self.skip:
+            self.skip -= 1
+        elif tag in BLOCK_TAGS:
+            self.parts.append("\n")
+
+    # Keep text nodes outside scripts and styles.
+    def handle_data(self, data: str):
+        if not self.skip:
+            self.parts.append(data)
+
+    # Return the accumulated plain text.
+    def text(self) -> str:
+        return "".join(self.parts)
+
+
+# Collapse whitespace without losing paragraphs.
+def normalize_text(text: str) -> str:
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+# Hash the text and the metadata that affects retrieval.
+def content_hash(text: str, metadata: dict | None = None) -> str:
+    payload = text + "\n" + json.dumps(metadata or {}, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+# Return the first Markdown heading, or a readable file name.
+def guess_title(path: Path, text: str) -> str:
+    for line in text.splitlines()[:20]:
+        if line.startswith("# "):
+            return line[2:].strip()[:200]
+    return path.stem.replace("_", " ").replace("-", " ").strip()[:200]
+
+
+# Strip script/style blocks and tags from an HTML file.
+def html_to_text(raw: str) -> str:
+    parser = _TextExtractor()
+    parser.feed(raw)
+    return html.unescape(parser.text())
+
+
+# Read a PDF page by page, caching the extracted text by file fingerprint.
+def read_pdf(path: Path) -> tuple[str, list[tuple[int, int]]]:
+    try:
+        import pymupdf
+    except ImportError as exc:  # pragma: no cover - depends on the venv
+        raise SystemExit("PDF support needs PyMuPDF; run `make venv`") from exc
+
+    stat = path.stat()
+    key = hashlib.sha1(
+        f"{path.resolve()}:{stat.st_size}:{stat.st_mtime_ns}".encode("utf-8")
+    ).hexdigest()
+    cache_file = CACHE_DIR / f"{key}.json"
+    if cache_file.exists():
+        pages = json.loads(cache_file.read_text(encoding="utf-8"))["pages"]
+    else:
+        with pymupdf.open(path) as pdf:
+            pages = [page.get_text("text") for page in pdf]
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(
+            json.dumps({"pages": pages}, ensure_ascii=False), encoding="utf-8"
+        )
+
+    parts = []
+    page_map: list[tuple[int, int]] = []
+    offset = 0
+    for number, page_text in enumerate(pages, start=1):
+        clean = normalize_text(page_text)
+        if not clean:
+            continue
+        if parts:
+            offset += 2
+        page_map.append((offset, number))
+        parts.append(clean)
+        offset += len(clean)
+    return "\n\n".join(parts), page_map
+
+
+# Read a DOCX file as plain paragraphs.
+def read_docx(path: Path) -> str:
+    try:
+        import docx
+    except ImportError as exc:  # pragma: no cover - depends on the venv
+        raise SystemExit("DOCX support needs python-docx; run `make venv`") from exc
+    document = docx.Document(path)
+    return "\n\n".join(paragraph.text for paragraph in document.paragraphs)
+
+
+# Read one supported file as text.
+def read_text_file(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".pdf":
+        return read_pdf(path)[0]
+    if suffix == ".docx":
+        return read_docx(path)
+    raw = path.read_text(encoding="utf-8", errors="replace")
+    if suffix in (".html", ".htm"):
+        return html_to_text(raw)
+    if suffix in (".md", ".markdown"):
+        return raw
+    return raw
+
+
+# Return the page map for a file, if its format has pages.
+def page_map_for(path: Path) -> list[tuple[int, int]] | None:
+    if path.suffix.lower() != ".pdf":
+        return None
+    return read_pdf(path)[1]
+
+
+# Check a relative path against the include and exclude globs.
+def is_included(relative: str, include: list[str], exclude: list[str]) -> bool:
+    from fnmatch import fnmatch
+
+    if any(fnmatch(relative, pattern) for pattern in exclude):
+        return False
+    return any(fnmatch(relative, pattern) for pattern in include)
+
+
+# Walk a folder and yield supported, non-excluded files in a stable order.
+def iter_files(source) -> Iterator[Path]:
+    root = source.path.resolve()
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.is_symlink():
+            continue
+        relative = path.relative_to(root).as_posix()
+        if any(part.startswith(".") for part in Path(relative).parts):
+            continue
+        if any(part in SKIP_DIRS for part in Path(relative).parts):
+            continue
+        if not is_included(relative, source.include, source.exclude):
+            continue
+        try:
+            if path.stat().st_size > source.max_file_bytes:
+                print(f"skip (too large): {relative}", file=sys.stderr)
+                continue
+        except OSError as exc:
+            print(f"skip ({exc}): {relative}", file=sys.stderr)
+            continue
+        yield path
+
+
+# Load one private notes/papers folder as documents.
+def load_file_source(source, corpus: str, limit: int | None = None) -> Iterator[SourceDocument]:
+    root = source.path.resolve()
+    count = 0
+    for path in iter_files(source):
+        if limit is not None and count >= limit:
+            break
+        relative = path.relative_to(root).as_posix()
+        try:
+            text = normalize_text(read_text_file(path))
+        except (OSError, ValueError) as exc:
+            print(f"skip ({exc}): {relative}", file=sys.stderr)
+            continue
+        if not text:
+            continue
+        if len(text.split()) < source.min_words:
+            continue
+        title = guess_title(path, text)
+        metadata = {"kind": "file", "suffix": path.suffix.lower()}
+        yield SourceDocument(
+            id=f"{corpus}:{relative}",
+            corpus=corpus,
+            corpus_version="fs-1",
+            title=title,
+            section=f"{corpus.capitalize()} > {path.parent.relative_to(root).as_posix() or '.'}",
+            path=str(path),
+            sha256=content_hash(text, metadata),
+            source={
+                "kind": "file",
+                "root": str(root),
+                "relative": relative,
+                "suffix": path.suffix.lower(),
+                "size": path.stat().st_size,
+                "mtime_ns": path.stat().st_mtime_ns,
+            },
+            text=text,
+            page_map=page_map_for(path),
+        )
+        count += 1
+
+
+# Turn a paper file name into a readable title.
+def paper_title(filename: str) -> str:
+    stem = Path(filename).stem
+    stem = re.sub(r"^\d{4,6}\.\d{4,5}_", "", stem)
+    return re.sub(r"[_-]+", " ", stem).strip()[:240]
+
+
+# Load the lab corpus from its manifest.
+def load_lab_corpus(corpus_path: Path, limit: int | None = None) -> Iterator[SourceDocument]:
+    manifest = json.loads((corpus_path / "MANIFEST.json").read_text(encoding="utf-8"))
+    version = manifest["corpus_version"]
+    for number, entry in enumerate(manifest["documents"]):
+        if limit is not None and number >= limit:
+            break
+        path = corpus_path / entry["path"]
+        raw = path.read_text(encoding="utf-8")
+        _, meta_text, body = raw.split("---\n", 2)
+        meta = yaml.safe_load(meta_text) or {}
+        yield SourceDocument(
+            id=entry["id"],
+            corpus="lab",
+            corpus_version=version,
+            title=entry["title"],
+            section=entry["section"],
+            path=entry["path"],
+            sha256=entry["sha256"],
+            source=meta["source"],
+            text=normalize_text(body),
+        )
+
+
+# Load the paper library from summaries and processed PDFs.
+def load_papers(source, limit: int | None = None) -> Iterator[SourceDocument]:
+    root = source.path.resolve()
+    pdf_dir = root / (source.pdf_dir or "processed-pdfs")
+    summaries_dir = root / (source.summaries_dir or "analysis_results_per_file")
+    summaries: dict[str, dict] = {}
+
+    # Read the summaries first; they carry the tags and the clean abstract.
+    if summaries_dir.exists():
+        for path in sorted(summaries_dir.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                print(f"skip summary ({exc}): {path.name}", file=sys.stderr)
+                continue
+            filename = data.get("filename")
+            if not filename or "?skip=" in filename:
+                continue
+            summaries[filename] = data
+
+    filenames = list(summaries)
+    for path in sorted(pdf_dir.glob("*.pdf")):
+        if path.name not in summaries:
+            filenames.append(path.name)
+
+    count = 0
+    for filename in filenames:
+        if limit is not None and count >= limit:
+            break
+        data = summaries.get(filename, {})
+        summary = (data.get("summary") or "").strip()
+        tags = data.get("tags") or []
+        pdf_path = pdf_dir / filename
+        pdf_text = ""
+        page_map = None
+        if pdf_path.exists():
+            try:
+                pdf_text, page_map = read_pdf(pdf_path)
+            except (OSError, ValueError) as exc:
+                print(f"skip pdf ({exc}): {pdf_path.name}", file=sys.stderr)
+
+        text_parts = [paper_title(filename)]
+        if summary:
+            text_parts.append(f"Summary: {summary}")
+        if tags:
+            text_parts.append("Topics: " + ", ".join(str(tag) for tag in tags))
+        if pdf_text:
+            text_parts.append(pdf_text)
+        text = normalize_text("\n\n".join(text_parts))
+        if len(text.split()) < 30:
+            continue
+
+        metadata = {"tags": tags, "summary": summary, "pdf": pdf_path.exists()}
+        source_info = {
+            "kind": "paper",
+            "pdf": str(pdf_path) if pdf_path.exists() else None,
+            "summary": str(summaries_dir / f"{Path(filename).stem}.json")
+            if data
+            else None,
+            "tags": tags,
+        }
+        yield SourceDocument(
+            id=f"papers:{filename}",
+            corpus="papers",
+            corpus_version="papers-1",
+            title=paper_title(filename),
+            section="Papers > " + (str(tags[0]) if tags else "Unfiled"),
+            path=str(pdf_path) if pdf_path.exists() else str(summaries_dir / f"{Path(filename).stem}.json"),
+            sha256=content_hash(text, metadata),
+            source=source_info,
+            text=text,
+            page_map=page_map,
+        )
+        count += 1
+
+
+# Resolve a corpus name to its document iterator.
+def iter_documents(settings, corpus: str, limit: int | None = None) -> Iterator[SourceDocument]:
+    if corpus == "lab":
+        corpus_path = Path(__file__).resolve().parents[1] / "corpus"
+        return load_lab_corpus(corpus_path, limit=limit)
+    source = settings.source(corpus)
+    if source.kind == "papers":
+        return load_papers(source, limit=limit)
+    return load_file_source(source, corpus, limit=limit)

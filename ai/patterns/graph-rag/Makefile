@@ -9,17 +9,22 @@
 #   make corpus-check   # validate the corpus and the golden set
 #   make migrate        # apply the Postgres schema (idempotent)
 #   make db-check       # prove idempotency and the hyperedge encoding
+#   make app-test       # offline tests for the local application
+#   make eval-local     # 42-question golden set against the local app
 #   make port-forward   # port-forward for local testing
 #   make clean          # remove k8s resources
 
 .PHONY: build deploy up eval corpus-manifest corpus-check db-up migrate db-check \
-  db-down db-shell port-forward clean test
+  db-down db-shell private-db-up private-migrate private-db-shell private-db-down \
+  venv app-test eval-local ingest-lab ingest-notes ingest-papers port-forward clean test
 
 IMAGE := boilerplate/graph-rag-api:1.0
 NAMESPACE := k8s-lab
 API_URL := http://localhost:8000
 DB_USER ?= graphrag
 DB_NAME ?= graphrag
+PRIVATE_DB_NAME ?= graphrag_private
+PYTHON ?= .venv/bin/python
 
 build:
 	docker build -t $(IMAGE) mockup
@@ -77,6 +82,53 @@ db-down:
 # Open a psql session against the local database.
 db-shell:
 	docker compose exec postgres psql -U $(DB_USER) -d $(DB_NAME)
+
+# Start the private notes/papers database on its own port and volume.
+private-db-up:
+	docker compose --profile private up -d postgres-private
+	@printf 'waiting for the private postgres...\n'
+	@until docker compose --profile private exec -T postgres-private \
+	    pg_isready -U $(DB_USER) -d $(PRIVATE_DB_NAME) >/dev/null 2>&1; do sleep 1; done
+
+# Apply the same schema to the private database.
+private-migrate: private-db-up
+	docker compose --profile private exec -T \
+	  -e PGOPTIONS='-c client_min_messages=warning' postgres-private \
+	  psql -v ON_ERROR_STOP=1 -q -U $(DB_USER) -d $(PRIVATE_DB_NAME) < db/schema.sql
+	@printf 'private schema applied\n'
+
+private-db-shell:
+	docker compose --profile private exec postgres-private \
+	  psql -U $(DB_USER) -d $(PRIVATE_DB_NAME)
+
+# Stop the private database; its named volume keeps the index.
+private-db-down:
+	docker compose --profile private stop postgres-private
+
+# Create the application virtualenv from app/requirements.txt.
+venv:
+	uv venv .venv
+	uv pip install --python .venv/bin/python -r app/requirements.txt
+	@printf 'venv ready: %s\n' "$(PYTHON)"
+
+# Offline checks for the app: chunker, source loaders, stub pipeline.
+app-test:
+	$(PYTHON) -m unittest discover -s app/tests -v
+
+# Score the local app against the 42-question golden set.
+eval-local:
+	$(PYTHON) eval/local_eval.py
+
+# Rebuild the synthetic evaluation index with real local models.
+ingest-lab:
+	$(PYTHON) -m app.cli ingest lab --db eval
+
+# Index the private notes and papers. Requires the private config file.
+ingest-notes:
+	$(PYTHON) -m app.cli ingest notes
+
+ingest-papers:
+	$(PYTHON) -m app.cli ingest papers
 
 # Run the offline checks (the evaluation itself needs the service).
 test: corpus-check
