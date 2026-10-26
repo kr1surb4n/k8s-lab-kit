@@ -1,7 +1,7 @@
 # Graph RAG API Mockup — minimal FastAPI image.
 # Build: docker build -t boilerplate/graph-rag-api:1.0 ai/patterns/graph-rag/mockup
 # Run:   docker run -p 8000:8000 boilerplate/graph-rag-api:1.0
-FROM python:3.12-alpine
+FROM python:3.15-alpine
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1
 RUN pip install --no-cache-dir --upgrade pip
