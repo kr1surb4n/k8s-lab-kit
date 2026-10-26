@@ -14,11 +14,13 @@ from .config import load_settings
 from .db import connect, corpus_stats
 from .llm import OllamaClient, OllamaError
 from .retrieval import answer, search
+from .telemetry import configure_telemetry
 
 LOGGER = logging.getLogger("graphrag.api")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 SETTINGS = load_settings()
+configure_telemetry(SETTINGS)
 PRIVATE_DSN = SETTINGS.dsn("private")
 EVAL_DSN = SETTINGS.dsn("eval")
 

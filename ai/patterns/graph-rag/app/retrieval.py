@@ -14,6 +14,7 @@ from .config import Settings
 from .db import connect, vector_literal
 from .llm import OllamaClient, StubEmbedder
 from .rerank import rerank_chunks
+from .telemetry import configure_telemetry, current_trace_id, span
 
 LOGGER = logging.getLogger("graphrag")
 REFUSAL = "The corpus does not contain enough information to answer this question."
@@ -307,6 +308,50 @@ def search(
     graph_hops: int | None = None,
     rerank: bool | None = None,
 ) -> dict[str, Any]:
+    configure_telemetry(settings)
+    hops = 2 if (graph_hops or settings.graph_hops) >= 2 else 1
+    with span(
+        "graphrag.search",
+        {
+            "graphrag.corpus": ",".join(corpora_list(corpus)),
+            "graphrag.k": k,
+            "graphrag.graph_hops": hops if with_graph else 0,
+            "graphrag.with_graph": with_graph,
+            "graphrag.stub": stub,
+        },
+    ) as current:
+        result = _search_impl(
+            settings,
+            dsn,
+            query,
+            corpus=corpus,
+            k=k,
+            stub=stub,
+            with_graph=with_graph,
+            graph_hops=graph_hops,
+            rerank=rerank,
+        )
+        result["trace_id"] = current_trace_id()
+        if current is not None:
+            current.set_attribute("graphrag.chunks", len(result["chunks"]))
+            current.set_attribute("graphrag.graph_path", len(result["graph_path"]))
+            current.set_attribute("graphrag.rerank", result["rerank"])
+            current.set_attribute("graphrag.latency_ms", result["latency_ms"])
+        return result
+
+
+# Implementation behind the traced search wrapper.
+def _search_impl(
+    settings: Settings,
+    dsn: str,
+    query: str,
+    corpus: str | None = None,
+    k: int = 8,
+    stub: bool = False,
+    with_graph: bool = True,
+    graph_hops: int | None = None,
+    rerank: bool | None = None,
+) -> dict[str, Any]:
     corpora = corpora_list(corpus)
     graph_hops = 2 if (graph_hops or settings.graph_hops) >= 2 else 1
     embedder = StubEmbedder() if stub else OllamaClient(settings.ollama_url)
@@ -407,9 +452,50 @@ def answer(
     graph_hops: int | None = None,
     rerank: bool | None = None,
 ) -> dict[str, Any]:
+    configure_telemetry(settings)
+    effective_top_k = top_k or settings.answer_top_k
+    with span(
+        "graphrag.answer",
+        {
+            "graphrag.corpus": corpus or "",
+            "graphrag.top_k": effective_top_k,
+            "graphrag.question_length": len(question),
+            "graphrag.stub": stub,
+        },
+    ) as current:
+        response = _answer_impl(
+            settings,
+            dsn,
+            question,
+            corpus=corpus,
+            top_k=top_k,
+            stub=stub,
+            graph_hops=graph_hops,
+            rerank=rerank,
+        )
+        if current is not None:
+            current.set_attribute("graphrag.citations", len(response["citations"]))
+            current.set_attribute("graphrag.graph_path", len(response["graph_path"]))
+            current.set_attribute("graphrag.refused", response["refused"])
+            current.set_attribute("graphrag.rerank", response["rerank"])
+            current.set_attribute("graphrag.latency_ms", response["latency_ms"])
+        return response
+
+
+# Implementation behind the traced answer wrapper.
+def _answer_impl(
+    settings: Settings,
+    dsn: str,
+    question: str,
+    corpus: str | None = None,
+    top_k: int | None = None,
+    stub: bool = False,
+    graph_hops: int | None = None,
+    rerank: bool | None = None,
+) -> dict[str, Any]:
     top_k = top_k or settings.answer_top_k
     graph_hops = graph_hops or settings.graph_hops
-    trace_id = secrets.token_hex(16)
+    trace_id = current_trace_id() or secrets.token_hex(16)
     started = time.time()
     retrieved = search(
         settings,

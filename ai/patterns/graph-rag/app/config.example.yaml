@@ -38,6 +38,14 @@ rerank: false
 rerank_candidates: 20
 rerank_model: ""   # empty = use models.generate
 
+# Optional OpenTelemetry spans. Attributes contain counts and settings only;
+# question and passage text are never added to a span.
+otel:
+  enabled: false
+  endpoint: http://localhost:4318/v1/traces
+  service_name: graphrag-local
+  console: false
+
 # Document sources. Corpus names are fixed: notes and papers.
 sources:
   notes:

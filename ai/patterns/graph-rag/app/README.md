@@ -193,13 +193,33 @@ under-counts correct paraphrases. Graph-path accuracy uses exact relation and
 entity labels from the local model, which are often phrased differently from
 the golden labels.
 
+## OpenTelemetry
+
+Tracing is optional and off by default. Add this to the private config to emit
+spans:
+
+```yaml
+otel:
+  enabled: true
+  endpoint: http://localhost:4318/v1/traces
+  service_name: graphrag-local
+  console: false
+```
+
+Console export writes one JSON span per line to stderr; OTLP/HTTP export uses
+the endpoint. The spans contain counts, models, graph hops, and latency, not the
+question or passage text. The application still runs if the OpenTelemetry
+packages are absent or the collector is down. See
+[`examples/opentelemetry-spans.md`](../examples/opentelemetry-spans.md).
+
 ## Privacy
 
 - Everything is local: Ollama at `localhost:11434`, Postgres on localhost, no
   cloud API calls in the app.
 - The private database, volume, config, PDF cache, and logs stay outside git.
 - Query text is written to the local process log with its trace id. Do not ship
-  those logs to a remote collector.
+  those logs to a remote collector. OpenTelemetry spans deliberately omit query
+  and passage text.
 - The HTTP API and MCP server have no authentication; treat them as local-only.
 
 ## Known limits
