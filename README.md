@@ -6,9 +6,13 @@ A step-by-step lab built from `k8_zadanie1_koper_prompt.md`, the PDF
 surrounding theory becomes runbooks and drills.
 
 **Status: core lab (A1–A7) executed on a real minikube cluster.** `make check`
-and `make test` (36/36) are green. See `resume.md` for the exact state.
+and `make test` are green. See `resume.md` for the exact state and the current
+test count; older snapshots may show 36.
 
 ## Start here
+
+New to the kit? Read [`START-HERE.md`](START-HERE.md) and the
+[guide index](guides/README.md) first.
 
 ```bash
 make doctor          # what this machine can host, plus a minikube command
@@ -20,10 +24,18 @@ If you have five minutes and no cluster, read
 [`analysis/01-analysis.md`](analysis/01-analysis.md) and
 [`docs/coverage-matrix.md`](docs/coverage-matrix.md).
 
+To use the kit at work, learn Kubernetes in order, or start another project,
+use the guides: [`real-world-use.md`](guides/real-world-use.md),
+[`kubernetes-learning-path.md`](guides/kubernetes-learning-path.md),
+[`repo-reading-map.md`](guides/repo-reading-map.md), and
+[`project-to-project.md`](guides/project-to-project.md).
+
 ## The map
 
 | Path | What it is |
 |---|---|
+| `START-HERE.md` | first-read orientation and the safety rule |
+| `guides/` | real-world reuse, learning path, reading map, project-to-project workflow |
 | `analysis/01-analysis.md` | what the three sources say, their defects, the design decisions |
 | `analysis/02-todo.md` | the ordered work list, phases 0–18 |
 | `analysis/03-research.md` | open questions with a test for each |
@@ -37,7 +49,7 @@ If you have five minutes and no cluster, read
 | `paczki/k8s/*.tpl` | templates for Coat's `paczek` (`{{ variable }}`) |
 | `scripts/` | the task scripts: up, down, status, scale, rollout, tunnel, verify, doctor, env, mkpasswd, cluster-create, cluster-delete |
 | `scripts/demo/kubectl` | fake client for offline transcripts, never a real cluster |
-| `tests/run.sh` | the offline suite (36 checks) |
+| `tests/run.sh` | the offline suite (38 checks) |
 | `site/` | the static site A1 serves, images included |
 | `app/` | the Laravel-shaped stand-in for A7 |
 | `coat/` | the Coat module, spells and installer |
@@ -74,7 +86,7 @@ value and is labelled as one.
 |---|---|
 | `make doctor` | tools, RAM, disk, ports, GPU, cluster, recommendation |
 | `make check` | syntax + shellcheck + YAML + dry-runs (offline) |
-| `make test` | `check` plus the 36-case suite against the fake client |
+| `make test` | `check` plus the 38-case suite against the fake client |
 | `make demo` | the simulated transcript used in the docs |
 | `make up` | `lab-up.sh a6 --mount` (real cluster) |
 | `make status` | `lab-status.sh a6` |
