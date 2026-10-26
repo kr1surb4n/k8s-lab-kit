@@ -51,15 +51,20 @@ never be committed. `GRAPHRAG_CONFIG` can point at a different file.
 
 # Papers: embeddings from the full PDF plus summary, graph from the summary tags.
 .venv/bin/python -m app.cli ingest papers
+
+# OCR only the low-text PDF pages (needs the tesseract command-line tool).
+.venv/bin/python -m app.cli ingest papers --ocr --limit 1 --force
 ```
 
 Notes and papers are accepted only by the private database; the CLI refuses to
 put them in the eval database. Re-running an ingest is incremental: unchanged
 documents are skipped by content hash. Add `--force` to rebuild, `--prune` to
-delete documents whose files disappeared, and `--limit N` for a trial run.
+delete documents whose files disappeared, `--limit N` for a trial run, and
+`--ocr` to override the source's OCR setting for one run.
 
 PDF text is cached under `~/.cache/graphrag/pdf-text/` and keyed by path, size,
-and modification time, so re-runs do not re-extract 600 PDFs.
+modification time, and OCR settings, so re-runs do not re-extract 600 PDFs and
+native text and OCR text do not share a cache entry.
 
 ### Current private index (2026-10-26)
 
@@ -212,7 +217,9 @@ the golden labels.
 - Files larger than `max_file_bytes` are skipped with `skip (too large)`. The
   private config raises the notes limit to 30 MB so large SingleFile pages fit;
   raise it further only for a file you trust.
-- Image-only PDFs produce little or no text; OCR is not part of this phase.
+- Image-only PDFs are skipped unless OCR is enabled. `--ocr` (or
+  `sources.<name>.ocr: true`) renders low-text pages and calls `tesseract`; it
+  is not enabled by default because it is CPU-heavy.
 - Graph context is one hop by default: edges attached to the top retrieved
   documents. `--graph-hops 2` or `graph_hops: 2` follows one shared entity into
   another document and marks the bridge with `via`. It is not an arbitrary

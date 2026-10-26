@@ -97,6 +97,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         chunk_words=args.chunk_words,
         overlap=args.overlap,
         prune=args.prune,
+        ocr=args.ocr,
     )
     print(json.dumps(result, indent=2))
     return 0
@@ -193,6 +194,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     ingest.add_argument("--force", action="store_true", help="reindex unchanged documents")
     ingest.add_argument("--prune", action="store_true", help="delete documents that disappeared")
+    ingest.add_argument(
+        "--ocr",
+        action="store_true",
+        default=None,
+        help="OCR low-text PDF pages for this run (needs tesseract)",
+    )
     ingest.add_argument("--chunk-words", type=int)
     ingest.add_argument("--overlap", type=int)
     ingest.set_defaults(func=cmd_ingest)

@@ -32,6 +32,7 @@ def ingest_corpus(
     chunk_words: int | None = None,
     overlap: int | None = None,
     prune: bool = False,
+    ocr: bool | None = None,
     verbose: bool = True,
 ) -> dict[str, Any]:
     max_words = chunk_words or settings.chunk_words
@@ -54,7 +55,9 @@ def ingest_corpus(
 
     with connect(dsn) as conn:
         stored = stored_hashes(conn, corpus)
-        for number, document in enumerate(iter_documents(settings, corpus, limit=limit), 1):
+        for number, document in enumerate(
+            iter_documents(settings, corpus, limit=limit, ocr=ocr), 1
+        ):
             seen_paths.add(document.path)
             # Unchanged documents are skipped unless a forced rebuild was asked for.
             if not force and stored.get(document.path) == document.sha256:

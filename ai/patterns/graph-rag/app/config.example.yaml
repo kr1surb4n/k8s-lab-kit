@@ -58,6 +58,11 @@ sources:
     # 30 MB accommodates large single-file web pages; lower it for a stricter default.
     max_file_bytes: 30000000
     min_words: 15
+    # OCR only low-text PDF pages. Needs the tesseract CLI, not a Python package.
+    ocr: false
+    ocr_lang: eng
+    ocr_min_words: 10
+    ocr_dpi: 200
 
   papers:
     kind: papers
@@ -66,3 +71,7 @@ sources:
     summaries_dir: analysis_results_per_file
     include: []
     exclude: []
+    ocr: false
+    ocr_lang: eng
+    ocr_min_words: 10
+    ocr_dpi: 200

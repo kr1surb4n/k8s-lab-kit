@@ -43,6 +43,10 @@ class SourceConfig:
     summaries_dir: str | None = None
     max_file_bytes: int = 20_000_000
     min_words: int = 15
+    ocr: bool = False
+    ocr_lang: str = "eng"
+    ocr_min_words: int = 10
+    ocr_dpi: int = 200
 
     # Build a source from its YAML mapping.
     @classmethod
@@ -57,6 +61,10 @@ class SourceConfig:
             summaries_dir=data.get("summaries_dir"),
             max_file_bytes=int(data.get("max_file_bytes", 20_000_000)),
             min_words=int(data.get("min_words", 15)),
+            ocr=bool(data.get("ocr", False)),
+            ocr_lang=str(data.get("ocr_lang", "eng")),
+            ocr_min_words=int(data.get("ocr_min_words", 10)),
+            ocr_dpi=int(data.get("ocr_dpi", 200)),
         )
 
 

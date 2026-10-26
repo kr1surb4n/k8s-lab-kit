@@ -5,8 +5,11 @@ import hashlib
 import html
 import json
 import re
+import shutil
+import subprocess
 import sys
-from dataclasses import dataclass, field
+import tempfile
+from dataclasses import dataclass, field, replace
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Iterator
@@ -98,27 +101,74 @@ def html_to_text(raw: str) -> str:
     return html.unescape(parser.text())
 
 
+# Render one PDF page and read it with the tesseract command-line tool.
+def _ocr_page(page, lang: str, dpi: int) -> str:
+    executable = shutil.which("tesseract")
+    if not executable:
+        raise RuntimeError("OCR needs the tesseract command-line tool")
+    with tempfile.TemporaryDirectory() as tmp:
+        image = Path(tmp) / "page.png"
+        page.get_pixmap(dpi=dpi).save(image)
+        result = subprocess.run(
+            [executable, str(image), "stdout", "-l", lang],
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
+    if result.returncode != 0:
+        raise RuntimeError(f"tesseract failed: {result.stderr.strip()[:200]}")
+    return result.stdout
+
+
 # Read a PDF page by page, caching the extracted text by file fingerprint.
-def read_pdf(path: Path) -> tuple[str, list[tuple[int, int]]]:
+def read_pdf(
+    path: Path,
+    ocr: bool = False,
+    ocr_lang: str = "eng",
+    ocr_min_words: int = 10,
+    ocr_dpi: int = 200,
+) -> tuple[str, list[tuple[int, int]]]:
     try:
         import pymupdf
     except ImportError as exc:  # pragma: no cover - depends on the venv
         raise SystemExit("PDF support needs PyMuPDF; run `make venv`") from exc
 
     stat = path.stat()
-    key = hashlib.sha1(
-        f"{path.resolve()}:{stat.st_size}:{stat.st_mtime_ns}".encode("utf-8")
-    ).hexdigest()
+    fingerprint = f"{path.resolve()}:{stat.st_size}:{stat.st_mtime_ns}"
+    # OCR pages need a different cache entry from native text extraction.
+    if ocr:
+        fingerprint += f":ocr={ocr_lang}:{ocr_min_words}:{ocr_dpi}:v1"
+    key = hashlib.sha1(fingerprint.encode("utf-8")).hexdigest()
     cache_file = CACHE_DIR / f"{key}.json"
+    cacheable = True
+    if ocr and not shutil.which("tesseract"):
+        print(f"ocr skipped (tesseract not found): {path.name}", file=sys.stderr)
+        ocr = False
+        cacheable = False
     if cache_file.exists():
         pages = json.loads(cache_file.read_text(encoding="utf-8"))["pages"]
     else:
+        pages = []
         with pymupdf.open(path) as pdf:
-            pages = [page.get_text("text") for page in pdf]
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cache_file.write_text(
-            json.dumps({"pages": pages}, ensure_ascii=False), encoding="utf-8"
-        )
+            for page in pdf:
+                native = page.get_text("text")
+                # Only image-only or nearly empty pages pay the OCR cost.
+                if ocr and len(native.split()) < ocr_min_words:
+                    try:
+                        recognized = _ocr_page(page, ocr_lang, ocr_dpi)
+                    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+                        print(f"ocr skipped ({exc}): {path.name}", file=sys.stderr)
+                        cacheable = False
+                        recognized = ""
+                    if len(recognized.split()) > len(native.split()):
+                        native = recognized
+                pages.append(native)
+        if cacheable:
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            cache_file.write_text(
+                json.dumps({"pages": pages}, ensure_ascii=False), encoding="utf-8"
+            )
 
     parts = []
     page_map: list[tuple[int, int]] = []
@@ -145,11 +195,17 @@ def read_docx(path: Path) -> str:
     return "\n\n".join(paragraph.text for paragraph in document.paragraphs)
 
 
-# Read one supported file as text.
-def read_text_file(path: Path) -> str:
+# Read one supported file as text, optionally OCRing low-text PDF pages.
+def read_text_file(
+    path: Path,
+    ocr: bool = False,
+    ocr_lang: str = "eng",
+    ocr_min_words: int = 10,
+    ocr_dpi: int = 200,
+) -> str:
     suffix = path.suffix.lower()
     if suffix == ".pdf":
-        return read_pdf(path)[0]
+        return read_pdf(path, ocr, ocr_lang, ocr_min_words, ocr_dpi)[0]
     if suffix == ".docx":
         return read_docx(path)
     raw = path.read_text(encoding="utf-8", errors="replace")
@@ -161,10 +217,16 @@ def read_text_file(path: Path) -> str:
 
 
 # Return the page map for a file, if its format has pages.
-def page_map_for(path: Path) -> list[tuple[int, int]] | None:
+def page_map_for(
+    path: Path,
+    ocr: bool = False,
+    ocr_lang: str = "eng",
+    ocr_min_words: int = 10,
+    ocr_dpi: int = 200,
+) -> list[tuple[int, int]] | None:
     if path.suffix.lower() != ".pdf":
         return None
-    return read_pdf(path)[1]
+    return read_pdf(path, ocr, ocr_lang, ocr_min_words, ocr_dpi)[1]
 
 
 # Check a relative path against the include and exclude globs.
@@ -214,7 +276,19 @@ def load_file_source(source, corpus: str, limit: int | None = None) -> Iterator[
             break
         relative = path.relative_to(root).as_posix()
         try:
-            text = normalize_text(read_text_file(path))
+            # PDFs need one pass so OCR is not repeated for the page map.
+            if path.suffix.lower() == ".pdf":
+                raw_text, page_map = read_pdf(
+                    path,
+                    ocr=source.ocr,
+                    ocr_lang=source.ocr_lang,
+                    ocr_min_words=source.ocr_min_words,
+                    ocr_dpi=source.ocr_dpi,
+                )
+                text = normalize_text(raw_text)
+            else:
+                text = normalize_text(read_text_file(path))
+                page_map = None
         except Exception as exc:  # noqa: BLE001 - one bad file must not stop the run
             print(f"skip ({exc}): {relative}", file=sys.stderr)
             continue
@@ -241,7 +315,7 @@ def load_file_source(source, corpus: str, limit: int | None = None) -> Iterator[
                 "mtime_ns": path.stat().st_mtime_ns,
             },
             text=text,
-            page_map=page_map_for(path),
+            page_map=page_map,
         )
         count += 1
 
@@ -322,7 +396,13 @@ def load_papers(source, limit: int | None = None) -> Iterator[SourceDocument]:
         page_map = None
         if pdf_path.exists():
             try:
-                pdf_text, page_map = read_pdf(pdf_path)
+                pdf_text, page_map = read_pdf(
+                    pdf_path,
+                    ocr=source.ocr,
+                    ocr_lang=source.ocr_lang,
+                    ocr_min_words=source.ocr_min_words,
+                    ocr_dpi=source.ocr_dpi,
+                )
             except Exception as exc:  # noqa: BLE001 - one bad PDF must not stop the run
                 print(f"skip pdf ({exc}): {pdf_path.name}", file=sys.stderr)
 
@@ -362,11 +442,16 @@ def load_papers(source, limit: int | None = None) -> Iterator[SourceDocument]:
 
 
 # Resolve a corpus name to its document iterator.
-def iter_documents(settings, corpus: str, limit: int | None = None) -> Iterator[SourceDocument]:
+def iter_documents(
+    settings, corpus: str, limit: int | None = None, ocr: bool | None = None
+) -> Iterator[SourceDocument]:
     if corpus == "lab":
         corpus_path = Path(__file__).resolve().parents[1] / "corpus"
         return load_lab_corpus(corpus_path, limit=limit)
     source = settings.source(corpus)
+    # A CLI override applies to this run without editing the private config.
+    if ocr is not None:
+        source = replace(source, ocr=ocr)
     if source.kind == "papers":
         return load_papers(source, limit=limit)
     return load_file_source(source, corpus, limit=limit)

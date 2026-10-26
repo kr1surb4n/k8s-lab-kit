@@ -71,6 +71,24 @@ class SourceTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 read_pdf(Path(tmp) / "missing.pdf")
 
+    def test_source_config_carries_ocr_options(self):
+        from app.config import SourceConfig
+
+        source = SourceConfig.from_mapping(
+            "notes",
+            {
+                "path": "~/notes",
+                "ocr": True,
+                "ocr_lang": "eng+pol",
+                "ocr_min_words": 4,
+                "ocr_dpi": 150,
+            },
+        )
+        self.assertTrue(source.ocr)
+        self.assertEqual(source.ocr_lang, "eng+pol")
+        self.assertEqual(source.ocr_min_words, 4)
+        self.assertEqual(source.ocr_dpi, 150)
+
 
 if __name__ == "__main__":
     unittest.main()
