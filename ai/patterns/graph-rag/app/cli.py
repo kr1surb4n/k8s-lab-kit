@@ -17,6 +17,8 @@ DEFAULT_DB_FOR_CORPUS = {"lab": "eval", "notes": "private", "papers": "private"}
 
 # Print a search result in a readable form.
 def print_search(result: dict[str, Any]) -> None:
+    if result.get("rerank"):
+        print(f"reranked with {result.get('rerank_model')}")
     for chunk in result["chunks"]:
         page = f" p.{chunk['page_start']}" if chunk.get("page_start") else ""
         print(f"{chunk['chunk_id']}  {chunk['title']}{page}  rrf={chunk['rrf']:.4f}")
@@ -112,6 +114,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         k=args.k,
         stub=args.stub,
         graph_hops=args.graph_hops,
+        rerank=args.rerank or None,
     )
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -132,6 +135,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
         top_k=args.top_k,
         stub=args.stub,
         graph_hops=args.graph_hops,
+        rerank=args.rerank or None,
     )
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -201,6 +205,9 @@ def main(argv: list[str] | None = None) -> int:
     search_cmd.add_argument(
         "--graph-hops", type=int, choices=[1, 2], help="one or two graph hops"
     )
+    search_cmd.add_argument(
+        "--rerank", action="store_true", help="rerank fused candidates with the local LLM"
+    )
     search_cmd.add_argument("--stub", action="store_true")
     search_cmd.add_argument("--json", action="store_true")
     search_cmd.set_defaults(func=cmd_search)
@@ -212,6 +219,9 @@ def main(argv: list[str] | None = None) -> int:
     ask.add_argument("--top-k", type=int)
     ask.add_argument(
         "--graph-hops", type=int, choices=[1, 2], help="one or two graph hops"
+    )
+    ask.add_argument(
+        "--rerank", action="store_true", help="rerank fused candidates with the local LLM"
     )
     ask.add_argument("--stub", action="store_true")
     ask.add_argument("--json", action="store_true")

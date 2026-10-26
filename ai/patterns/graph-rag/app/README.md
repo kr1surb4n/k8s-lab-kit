@@ -100,6 +100,10 @@ they use the local LLM.
 .venv/bin/python -m app.cli search "How is a Service connected to Pods?" \
   --corpus lab --graph-hops 2
 
+# Rerank the fused candidates with one local LLM call.
+.venv/bin/python -m app.cli search "How is a Service connected to Pods?" \
+  --corpus lab --rerank
+
 # The evaluation corpus is in the eval database.
 .venv/bin/python -m app.cli ask "How do Deployments relate to Pods?" --corpus lab
 ```
@@ -108,7 +112,8 @@ they use the local LLM.
 this question.` when retrieval is weak, and only cites chunk ids that were
 actually retrieved. Each response carries a `trace_id`, model version, prompt
 version, latency, cosine and RRF scores, and graph edges attached to the
-retrieved documents.
+retrieved documents. `--rerank` adds one local listwise LLM call; the response
+sets `rerank` and `rerank_model`. If the call fails, the RRF order is kept.
 
 ## HTTP API
 
@@ -194,6 +199,9 @@ the golden labels.
 
 ## Known limits
 
+- Reranking is a listwise generation prompt, not a trained cross-encoder. It
+  adds a model call and can prefer a plausible but non-answering passage. It
+  falls back to RRF order on any model or parsing failure.
 - Lexical search uses Postgres `english` stemming. bge-m3 handles Polish
   queries semantically, but Polish keyword matching is weaker than English.
 - Relation extraction reads the first ~3000 characters of a note. Very long

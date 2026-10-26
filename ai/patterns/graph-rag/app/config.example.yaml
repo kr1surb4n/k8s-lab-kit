@@ -32,6 +32,12 @@ answer_top_k: 12
 # One hop is the default; 2 follows shared entities into other documents.
 graph_hops: 1
 
+# Rerank the fused candidates with one local listwise LLM call.
+# This adds latency; leave it off unless the evaluation improves.
+rerank: false
+rerank_candidates: 20
+rerank_model: ""   # empty = use models.generate
+
 # Document sources. Corpus names are fixed: notes and papers.
 sources:
   notes:

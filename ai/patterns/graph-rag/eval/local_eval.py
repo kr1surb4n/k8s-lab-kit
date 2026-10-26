@@ -78,7 +78,12 @@ def graph_path_score(expected: list[dict], actual: list[dict]) -> float:
 
 # Run one golden question through the local answer pipeline.
 def evaluate_one(
-    settings, dsn: str, golden: dict, stub: bool, graph_hops: int | None = None
+    settings,
+    dsn: str,
+    golden: dict,
+    stub: bool,
+    graph_hops: int | None = None,
+    rerank: bool | None = None,
 ) -> dict:
     started = time.time()
     result = answer(
@@ -89,6 +94,7 @@ def evaluate_one(
         top_k=settings.answer_top_k,
         stub=stub,
         graph_hops=graph_hops,
+        rerank=rerank,
     )
     latency = int((time.time() - started) * 1000)
     answer_text = result["answer"]
@@ -215,6 +221,7 @@ def main() -> int:
     parser.add_argument(
         "--graph-hops", type=int, choices=[1, 2], help="one or two graph hops"
     )
+    parser.add_argument("--rerank", action="store_true", help="rerank with the local LLM")
     parser.add_argument("--json-out", type=Path, help="write per-question results")
     args = parser.parse_args()
 
@@ -223,7 +230,9 @@ def main() -> int:
     golden = load_golden(args.golden)
     results = []
     for item in golden:
-        result = evaluate_one(settings, dsn, item, args.stub, args.graph_hops)
+        result = evaluate_one(
+            settings, dsn, item, args.stub, args.graph_hops, args.rerank or None
+        )
         results.append(result)
         status = "ok" if result["facts_ok"] else "fact-miss"
         if result["kind"] == "refusal":

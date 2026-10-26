@@ -13,6 +13,7 @@ import psycopg
 from .config import Settings
 from .db import connect, vector_literal
 from .llm import OllamaClient, StubEmbedder
+from .rerank import rerank_chunks
 
 LOGGER = logging.getLogger("graphrag")
 REFUSAL = "The corpus does not contain enough information to answer this question."
@@ -304,6 +305,7 @@ def search(
     stub: bool = False,
     with_graph: bool = True,
     graph_hops: int | None = None,
+    rerank: bool | None = None,
 ) -> dict[str, Any]:
     corpora = corpora_list(corpus)
     graph_hops = 2 if (graph_hops or settings.graph_hops) >= 2 else 1
@@ -319,6 +321,18 @@ def search(
             conn, query, corpora, settings.lexical_top_k
         )
         fused = rrf_fuse(vector_rows, lexical_rows)
+        rerank_enabled = settings.rerank if rerank is None else rerank
+        reranked = False
+        # Rerank before selecting the final top k; the graph follows that order.
+        if rerank_enabled and not stub and len(fused) > 1:
+            rerank_model = settings.rerank_model or settings.generate_model
+            fused, reranked = rerank_chunks(
+                fused,
+                query,
+                OllamaClient(settings.ollama_url),
+                rerank_model,
+                max_candidates=settings.rerank_candidates,
+            )
         top = fused[:k]
 
         document_ids = list(dict.fromkeys(item["doc_id"] for item in top))[:5]
@@ -350,6 +364,10 @@ def search(
         ],
         "graph_path": graph_path,
         "graph_hops": graph_hops if with_graph else 0,
+        "rerank": reranked,
+        "rerank_model": (
+            (settings.rerank_model or settings.generate_model) if reranked else ""
+        ),
         "embed_model": "stub-hash-1024" if stub else settings.embed_model,
         "latency_ms": int((time.time() - started) * 1000),
     }
@@ -387,6 +405,7 @@ def answer(
     top_k: int | None = None,
     stub: bool = False,
     graph_hops: int | None = None,
+    rerank: bool | None = None,
 ) -> dict[str, Any]:
     top_k = top_k or settings.answer_top_k
     graph_hops = graph_hops or settings.graph_hops
@@ -401,6 +420,7 @@ def answer(
         stub=stub,
         with_graph=True,
         graph_hops=graph_hops,
+        rerank=rerank,
     )
     chunks = retrieved["chunks"]
     top_score = max((chunk["vector_score"] for chunk in chunks), default=0.0)
@@ -420,6 +440,8 @@ def answer(
             "latency_ms": int((time.time() - started) * 1000),
             "refused": True,
             "graph_hops": retrieved["graph_hops"],
+            "rerank": retrieved["rerank"],
+            "rerank_model": retrieved["rerank_model"],
         }
         _log(response, question)
         return response
@@ -476,6 +498,8 @@ def answer(
         "latency_ms": int((time.time() - started) * 1000),
         "refused": refused,
         "graph_hops": retrieved["graph_hops"],
+        "rerank": retrieved["rerank"],
+        "rerank_model": retrieved["rerank_model"],
     }
     _log(response, question)
     return response

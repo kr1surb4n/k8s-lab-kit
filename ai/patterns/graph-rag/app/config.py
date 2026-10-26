@@ -77,6 +77,9 @@ class Settings:
     lexical_top_k: int = 30
     answer_top_k: int = 12
     graph_hops: int = 1
+    rerank: bool = False
+    rerank_candidates: int = 20
+    rerank_model: str = ""
 
     # Return the DSN for a named database.
     def dsn(self, name: str) -> str:
@@ -131,4 +134,7 @@ def load_settings(path: Path | None = None) -> Settings:
         lexical_top_k=int(data.get("lexical_top_k", Settings.lexical_top_k)),
         answer_top_k=int(data.get("answer_top_k", Settings.answer_top_k)),
         graph_hops=int(data.get("graph_hops", Settings.graph_hops)),
+        rerank=bool(data.get("rerank", Settings.rerank)),
+        rerank_candidates=int(data.get("rerank_candidates", Settings.rerank_candidates)),
+        rerank_model=str(data.get("rerank_model", Settings.rerank_model) or ""),
     )
