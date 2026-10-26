@@ -191,7 +191,13 @@ def stub_extract(document: Any) -> dict[str, Any]:
 
 # Build a graph from the paper's tags and summary metadata; no model call.
 def tags_extract(document: Any) -> dict[str, Any]:
-    tags = [str(tag).strip() for tag in (document.source.get("tags") or []) if str(tag).strip()]
+    raw_tags = [
+        str(tag).strip().replace("\x00", "")
+        for tag in (document.source.get("tags") or [])
+        if str(tag).strip().replace("\x00", "")
+    ]
+    # A repeated tag would violate the edge member primary key.
+    tags = list(dict.fromkeys(raw_tags))
     title = document.title
     entities = [{"name": title, "type": "Paper"}] + [
         {"name": tag, "type": "Topic"} for tag in tags

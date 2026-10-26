@@ -80,6 +80,16 @@ class ExtractionTests(unittest.TestCase):
         self.assertEqual(len(result["hyperedges"]), 1)
         self.assertEqual(result["hyperedges"][0]["relation"], "COVERS_TOPICS")
 
+    def test_tags_extractor_deduplicates_tags(self):
+        from app.extract import tags_extract
+
+        document = SimpleNamespace(
+            title="A Paper", source={"tags": ["Graphs", "Graphs", "Retrieval"]}
+        )
+        result = tags_extract(document)
+        self.assertEqual(len(result["relations"]), 2)
+        self.assertEqual(len(result["hyperedges"]), 0)
+
     def test_tags_extractor_needs_three_tags_for_a_hyperedge(self):
         from app.extract import tags_extract
 

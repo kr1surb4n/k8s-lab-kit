@@ -69,6 +69,8 @@ class _TextExtractor(HTMLParser):
 
 # Collapse whitespace without losing paragraphs.
 def normalize_text(text: str) -> str:
+    # PostgreSQL text cannot store NUL bytes; some PDFs contain them.
+    text = text.replace("\x00", "")
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -310,7 +312,11 @@ def load_papers(source, limit: int | None = None) -> Iterator[SourceDocument]:
         tags = data.get("tags") or []
         if isinstance(tags, str):
             tags = [tags]
-        tags = [str(tag).strip() for tag in tags if str(tag).strip()]
+        tags = [
+            str(tag).strip().replace("\x00", "")
+            for tag in tags
+            if str(tag).strip().replace("\x00", "")
+        ]
         pdf_path = pdf_dir / filename
         pdf_text = ""
         page_map = None

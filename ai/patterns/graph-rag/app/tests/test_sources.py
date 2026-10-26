@@ -27,6 +27,9 @@ class SourceTests(unittest.TestCase):
     def test_normalize_collapses_blank_lines(self):
         self.assertEqual(normalize_text("a\r\n\n\n\nb  c"), "a\n\nb c")
 
+    def test_normalize_removes_nul_bytes(self):
+        self.assertEqual(normalize_text("a\x00b"), "ab")
+
     def test_include_and_exclude(self):
         include = ["**/*.md", "**/*.txt"]
         exclude = ["My Games/**", "zip/**"]
