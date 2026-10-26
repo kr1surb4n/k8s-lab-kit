@@ -262,7 +262,9 @@ def _insert_edge(
     roles: list[str],
     type_by_name: dict[str, str],
 ) -> str:
-    key = f"{document.id}|{kind}|{'|'.join(sorted(members))}"
+    key = f"{document.id}|{kind}|" + (
+        "|".join(sorted(members)) if len(members) >= 3 else "|".join(members)
+    )
     edge_id = "e:" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:20]
     conn.execute(
         """
@@ -275,13 +277,14 @@ def _insert_edge(
         """,
         (edge_id, kind, len(members), confidence, document.id),
     )
+    # This edge id belongs to exactly one document, so replacing its members
+    # is safe and avoids position conflicts when a relation repeats.
+    conn.execute("DELETE FROM edge_nodes WHERE edge_id = %s", (edge_id,))
     for position, (member, role) in enumerate(zip(members, roles), start=1):
         conn.execute(
             """
             INSERT INTO edge_nodes (edge_id, node_id, role, position)
             VALUES (%s, %s, %s, %s)
-            ON CONFLICT (edge_id, node_id, role) DO UPDATE SET
-                position = EXCLUDED.position
             """,
             (edge_id, node_id(member, type_by_name.get(member, "Entity")), role, position),
         )
