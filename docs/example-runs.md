@@ -434,3 +434,103 @@ Two defects had to be fixed to get here: the mockup generated a random uuid
 instead of using the active span, and the FastAPI stack used
 `BaseHTTPMiddleware`, which loses the span context. The stack now uses a pure
 ASGI middleware and adds `X-Trace-ID` to the response.
+
+---
+
+## 9. Alertmanager → in-cluster webhook — real
+
+Alertmanager is enabled with a single non-default route: the always-firing
+`LabWebhookTest` rule goes to `lab-webhook`, an in-cluster Python receiver with
+no custom image (`observability/alert-webhook/`). Everything else stays on the
+`null` receiver.
+
+```console
+$ kubectl -n observability get pods | grep -E 'alertmanager|alert-webhook'
+alert-webhook-f7b6f5567-9dqw9                                     1/1     Running   0          20m
+alertmanager-kube-prometheus-stack-alertmanager-0                 2/2     Running   0          20m
+
+$ kubectl -n observability port-forward svc/alert-webhook 18080:80 &
+$ curl -s http://127.0.0.1:18080/alerts | python3 -m json.tool
+{
+    "count": 1,
+    "alerts": [
+        {
+            "status": "firing",
+            "receiver": "lab-webhook",
+            "alerts": [
+                {
+                    "name": "LabWebhookTest",
+                    "state": "firing",
+                    "summary": "Alertmanager webhook path test"
+                }
+            ]
+        }
+    ]
+}
+
+$ kubectl -n observability logs deploy/alert-webhook --since=30m | grep 'alert delivery'
+2026-10-26 00:46:59,161 INFO alert delivery: {"status": "firing", "receiver": "lab-webhook", "alerts": [{"name": "LabWebhookTest", "state": "firing", "summary": "Alertmanager webhook path test"}]}
+```
+
+The real symptom path uses the `PodNotReady` rule. The fixture
+`observability/alert-webhook/fixtures/pending-pod.yaml` requests 100 CPUs and
+100 GiB, so it stays `Pending`:
+
+```console
+$ kubectl -n k8s-lab get pod webhook-pending
+NAME              READY   STATUS    RESTARTS   AGE
+webhook-pending   0/1     Pending   0          10m
+
+$ curl -s http://127.0.0.1:18083/alerts | python3 -m json.tool
+{
+    "count": 3,
+    "alerts": [
+        ...
+        {
+            "status": "firing",
+            "receiver": "lab-webhook",
+            "alerts": [
+                {
+                    "name": "PodNotReady",
+                    "state": "firing",
+                    "summary": "pod webhook-pending is Pending"
+                }
+            ]
+        }
+    ]
+}
+
+$ kubectl -n observability logs deploy/alert-webhook --since=40m | grep 'alert delivery' | tail -1
+2026-10-26 01:12:10,501 INFO alert delivery: {"status": "firing", "receiver": "lab-webhook", "alerts": [{"name": "PodNotReady", "state": "firing", "summary": "pod webhook-pending is Pending"}]}
+```
+
+Deleting the fixture produced a fourth delivery because `send_resolved: true`:
+
+```console
+$ curl -s http://127.0.0.1:18085/alerts | python3 -m json.tool
+{
+    "count": 4,
+    "alerts": [
+        ...
+        {
+            "status": "resolved",
+            "receiver": "lab-webhook",
+            "alerts": [
+                {
+                    "name": "PodNotReady",
+                    "state": "resolved",
+                    "summary": "pod webhook-pending is Pending"
+                }
+            ]
+        }
+    ]
+}
+
+$ kubectl -n observability logs deploy/alert-webhook --since=40m | grep 'alert delivery' | tail -1
+2026-10-26 01:17:10,502 INFO alert delivery: {"status": "resolved", "receiver": "lab-webhook", "alerts": [{"name": "PodNotReady", "state": "resolved", "summary": "pod webhook-pending is Pending"}]}
+```
+
+One trap: the first version labelled the test alert `severity: info`. The
+chart's default `InfoInhibitor` rule suppresses every `info` alert, so the route
+matched (`receivers: [lab-webhook]`) but Alertmanager never notified. Changing
+the label to `warning` made it active and delivered.

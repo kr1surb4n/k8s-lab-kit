@@ -3,9 +3,9 @@
 **Snapshot:** 2026-10-26
 **Path:** `/home/kris/00___Castle/07__WorkShops/k8s`
 **Branch:** `main`
-**HEAD:** `41c87d3 docs: import the hands-on exercise sheet`
+**HEAD:** `f584d05 feat(observability): route alerts to an in-cluster webhook`
 **Offline gate:** `make test` → **36 passed, 0 failed, 0 skipped**
-**Tracked files:** 187
+**Tracked files:** 193
 **Working tree:** clean before this report was added
 
 This report describes what the repository contains now, what changed in the
@@ -45,7 +45,7 @@ current-state pointer is `resume.md`. The phase list is `analysis/02-todo.md`.
 | 12 | Hardware gate and boilerplates | **done** | `boilerplates/`, `paczki/k8s/` |
 | 13 | Recovery drills | **done** | `recovery/`, `scripts/lab-drill.sh` |
 | 14 | Eight stack templates | **done** | `boilerplates/stacks/` |
-| 15 | Observability | **mostly done** | stack healthy; both apps instrumented; alert webhook open |
+| 15 | Observability | **done** | stack healthy; both apps instrumented; Alertmanager webhook delivered |
 | 16 | RAG pattern + evaluation | **done** | `ai/patterns/rag/`, `ai/patterns/rag/eval/results.json` |
 | 17 | Graph RAG | **scaffold imported, not built** | `ai/patterns/graph-rag/`, `PROVENANCE.md` |
 | 18 | Cloud free tier | **not started** | plan in `analysis/07` §5 |
@@ -69,7 +69,7 @@ than silently marked complete.
 - Verified the `observability` namespace was healthy before the later reboot
   cycle.
 
-### 3.2 Phase 15 — trace-to-log correlation
+### 3.2 Phase 15 — tracing and alerting
 
 **RAG mockup (`ai/patterns/rag/mockup/main.py`)**
 
@@ -93,9 +93,11 @@ than silently marked complete.
 `bd627ac76f5b353d122f2a0fb5c34a07` exist in Tempo, and the matching log lines
 carry the same ids. The transcript is recorded in `docs/example-runs.md` §8.
 
-**Still open:** one Alertmanager alert routed to an in-cluster webhook receiver,
-with a delivered test alert. Alertmanager is currently `enabled: false` in
-`observability/values/kube-prometheus-stack.yaml`.
+**Alert delivery (now done):** Alertmanager is enabled with one non-default
+route. The always-firing `LabWebhookTest` and a real `PodNotReady` from an
+unschedulable pod both reached `observability/alert-webhook/`, a stdlib Python
+receiver with no custom image. The resolved notification was delivered too. The
+proof is in `docs/example-runs.md` §9.
 
 ### 3.3 Salvage from the capital-S copy
 
@@ -128,6 +130,8 @@ The empty parent `07__WorkShOps` was also removed. Only
 ### 3.4 Commits added in this session
 
 ```
+f584d05 feat(observability): route alerts to an in-cluster webhook
+e895a31 docs: add repository state report
 41c87d3 docs: import the hands-on exercise sheet
 af607b4 docs(cloud): import free-tier provider notes
 b9190f5 feat(ai): import graph-rag scaffold from the abandoned copy
@@ -156,7 +160,7 @@ clusters/           minikube, kind, k3d, k3s, managed skeletons
 coat/               Coat module and installer (dry-run only)
 docs/               runbooks, example runs, coverage matrix, exercises
 manifests/          A1, A2, A3, A5, A6, A7
-observability/      kube-prometheus-stack values + install script
+observability/      kube-prometheus-stack values, install script, alert webhook
 paczki/k8s/         eight reusable templates
 recovery/           recovery method + drills
 scripts/            lab lifecycle, doctor, cluster, demo fake kubectl
@@ -176,7 +180,8 @@ tests/              offline suite (36 tests)
 | Graph-RAG image build | `boilerplate/graph-rag-api:1.0` built successfully |
 | Graph-RAG smoke test | `/healthz` OK; query returns `graph_path`; `X-Trace-ID` present |
 | Graph-RAG kustomize | `kubectl kustomize ai/patterns/graph-rag/k8s` renders |
-| Observability | healthy earlier in the session; minikube stopped at snapshot time |
+| Alertmanager → webhook | `LabWebhookTest` and a real `PodNotReady` delivered; firing and resolved both logged |
+| Observability | healthy in `observability`; Alertmanager and the webhook are running |
 
 The imported Graph-RAG YAML and Python are **not** part of the 36-test suite.
 They were smoke-tested by hand only.
@@ -184,11 +189,6 @@ They were smoke-tested by hand only.
 ---
 
 ## 6. Open work
-
-### Phase 15 — one box
-
-- Enable Alertmanager, add one receiver pointing at a small in-cluster webhook,
-  break a pod on purpose, and record the delivery.
 
 ### Phase 17 — Graph RAG
 
@@ -223,18 +223,20 @@ checklist written before provisioning. Nothing billable may be created.
 ### Older partial boxes
 
 Phases 9–11 still have the distribution/Helm/Ingress/storage/traceability items
-listed in `analysis/02-todo.md`. They are lower priority than 15, 17 and 18.
+listed in `analysis/02-todo.md`. They are lower priority than 17 and 18.
 
 ---
 
 ## 7. Notes and risks
 
-- **Minikube is stopped at snapshot time.** Start it with
-  `minikube start --driver=docker` before cluster work.
+- **Minikube is running at snapshot time.** The observability namespace,
+  Alertmanager and the webhook receiver are up.
 - **Build images with host Docker, then `minikube image load`.** `minikube
   docker-env` does not work reliably on this setup.
 - **The Graph-RAG manifest still requests a GPU and contains placeholder
   secrets (`changeme`).** Do not apply it as-is.
+- **`severity: info` alerts never notify.** The chart's default `InfoInhibitor`
+  suppresses every info alert; the webhook test alert uses `warning` on purpose.
 - **`analysis/07-what-to-do.md` says Phase 17 is "not started".** That remains
   true for the phase deliverable; the imported directory is a scaffold only.
 - **`DOCUMENTATION.md` from the old copy is gone.** Do not recreate its
@@ -252,9 +254,11 @@ make test                 # expect 36/36
 git status                # expect clean
 sed -n '1,200p' analysis/07-what-to-do.md
 
-# Phase 15 leftover
-minikube start --driver=docker
+# Phase 15 check (already done; confirm it is still alive)
+minikube start --driver=docker   # only if stopped
 kubectl -n observability get pods
+kubectl -n observability port-forward svc/alert-webhook 8080:80 &
+curl -s http://127.0.0.1:8080/alerts | python3 -m json.tool
 
 # Phase 17, after models are pulled
 make -C ai/patterns/graph-rag build

@@ -18,7 +18,7 @@ HEAD: `1ac78a0 chore: ignore eval results file`
 | Phase 12 — boilerplates and paczki | **done** | `boilerplates/`, `paczki/k8s/`, commit `d45d7b1` |
 | Phase 13 — recovery drills | **done** | `recovery/`, `scripts/lab-drill.sh`, commit `f94145c` |
 | Phase 14 — other stacks | **done** | `boilerplates/stacks/` (8 stacks), commit `da0b869` |
-| Phase 15 — observability | **mostly done** | commits `5e920a2`, `fffdfc0`; two boxes still open (§4) |
+| Phase 15 — observability | **done** | commits `5e920a2`, `fffdfc0`; trace and webhook proofs in `docs/example-runs.md` §8–§9 |
 | Phase 16 — RAG pattern | **done** | `ai/patterns/rag/`, commits `c1adaae` … `f7b0f3c` |
 | Phase 17 — Graph RAG | **not started** | attempted work was never committed and was rolled back |
 | Phase 18 — cloud free tier | **not started** | same |
@@ -156,17 +156,19 @@ with the score table and one trace id pasted into the README.
 
 ---
 
-## 4. Phase 15 — two open boxes (S–M)
+## 4. Phase 15 — closed (S–M)
 
-These are the only unchecked items from an otherwise finished phase:
+Both boxes are done:
 
 - [x] Instrument two deployed apps with the OTel SDK (RAG mockup and FastAPI
       stack) so the log line carries the trace id visible in Tempo. Verified
       end to end; see `docs/example-runs.md` §8.
-- [ ] Route one alert to a webhook (Alertmanager receiver), and prove it fires.
+- [x] Route one alert to a webhook (Alertmanager receiver), and prove it fires.
+      `LabWebhookTest` and a real `PodNotReady` from an unschedulable pod both
+      reached the in-cluster receiver; see `docs/example-runs.md` §9.
 
-**Verify:** one LAN request is traceable end to end (Grafana → Tempo → log line),
-and a deliberately broken pod produces a webhook delivery.
+**Verify (done):** one LAN request is traceable end to end (Grafana → Tempo →
+log line), and a deliberately broken pod produces a webhook delivery.
 
 ---
 

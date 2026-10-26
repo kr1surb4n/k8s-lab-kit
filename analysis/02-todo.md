@@ -219,7 +219,7 @@ the previous one left a working boilerplate and a transcript.
 
 **Verify:** each stack has kustomize overlay extending boilerplates/base, non-root containers, health endpoints, structured logging, graceful shutdown, resource limits. Image builds documented in stack READMEs.
 
-## Phase 15 — Observability and traceability (M–L) — **PARTIAL (webhook open)**
+## Phase 15 — Observability and traceability (M–L) — **DONE**
 
 - [x] `observability/inventory/hosts.yaml` first: names, addresses, roles, ports.
 - [x] Prometheus (kube-prometheus-stack) + node-exporter + blackbox-exporter.
@@ -230,11 +230,11 @@ the previous one left a working boilerplate and a transcript.
 - [x] OTel Collector (0.163.2) with OTLP HTTP/GRPC receivers, otlphttp exporter to Tempo.
 - [x] Trace ingestion verified: `curl -X POST :4318/v1/traces` → visible in Tempo UI.
 - [x] OTel instrumentation in two apps (RAG mockup and FastAPI stack); trace id visible in the log line and matched to Tempo (`docs/example-runs.md` §8).
-- [ ] Alerts routed to a webhook.
+- [x] Alerts routed to an in-cluster webhook; `LabWebhookTest` and a real `PodNotReady` both delivered (`docs/example-runs.md` §9).
 
-**Verify:** a request from the LAN is traceable end to end; a host reboot raises an alert.
+**Verify:** a request from the LAN is traceable end to end; a deliberately broken pod produces a webhook delivery. Both are recorded in `docs/example-runs.md` §8–§9.
 
-> **Note:** Full stack (metrics + logs + traces + uptime + Grafana) deployed and working. Trace ingestion verified end-to-end.
+> **Note:** Full stack (metrics + logs + traces + uptime + Grafana) deployed and working. Trace ingestion and webhook delivery verified end-to-end.
 
 ## Phase 16 — AI patterns catalogue (S–M) — **RAG DONE**
 

@@ -5,10 +5,10 @@ details.
 
 - **Folder:** `/home/kris/00___Castle/07__WorkShops/k8s`
 - **Date:** 2026-10-26
-- **State:** **Phases 0–16 done; Phase 17 scaffold imported but not built; Phase 18 open**
+- **State:** **Phases 0–16 done, including the Phase 15 webhook; Phase 17 scaffold imported but not built; Phase 18 open**
 - **Git:** repository on `main`; conventional commits, one change per commit
 - **Offline gate:** `make test` → **36 passed, 0 failed**
-- **Cluster:** minikube stopped at last snapshot; `observability` was healthy earlier
+- **Cluster:** minikube running; `observability` healthy with Alertmanager and the webhook receiver
 - **Full snapshot:** `docs/REPO-STATE.md`
 
 ## One paragraph
@@ -45,6 +45,7 @@ free-tier experiment (18) are the remaining phases; see
 | Offline test suite | `tests/run.sh` → 36 passed |
 | Coat module, spells, installer | `coat/` (installer tested with `--dry-run`) |
 | Observability full stack (Prometheus, Grafana, Loki, Tempo, OTel) | `observability/`, running in `observability` namespace |
+| Alertmanager → in-cluster webhook | `observability/alert-webhook/`, proof in `docs/example-runs.md` §9 |
 | RAG pattern + eval baseline | `ai/patterns/rag/`, `ai/patterns/rag/eval/results.json` |
 | Bastion scaffold (host + in-cluster) | `bastion/` |
 | Cluster skeletons (minikube, kind, k3d, k3s, managed) | `clusters/` |
@@ -60,11 +61,9 @@ free-tier experiment (18) are the remaining phases; see
 2. **Phase 18 — cloud free tier.** Plan-only until an account is provided; the
    deliverable is provider docs, Terraform validated with `terraform plan`, the
    A6 overlay, and a teardown checklist.
-3. **Two Phase 15 boxes.** OTel instrumentation in one or two apps (trace id in
-   the log line) and one Alertmanager alert routed to an in-cluster webhook.
-4. **Coat is not installed.** Only `coat/install-coat.sh --dry-run` was run.
-5. **Bastion not deployed.** Manifests and host config exist, not applied.
-6. **`paczki/k8s` was not exercised through `paczek`.** The `fill_template`
+3. **Coat is not installed.** Only `coat/install-coat.sh --dry-run` was run.
+4. **Bastion not deployed.** Manifests and host config exist, not applied.
+5. **`paczki/k8s` was not exercised through `paczek`.** The `fill_template`
    syntax (`{{ VAR }}`) matches Coat, but it was not run.
 
 ## Next actions, in order
@@ -78,9 +77,10 @@ make test
 # 2. read the current plan
 sed -n '1,120p' analysis/07-what-to-do.md
 
-# 3. Phase 15 leftovers (cluster is already running)
+# 3. confirm the observability path is still alive
 kubectl -n observability get pods
-make obs PROFILE=full   # only if the stack is missing
+kubectl -n observability port-forward svc/alert-webhook 8080:80 &
+curl -s http://127.0.0.1:8080/alerts | python3 -m json.tool
 
 # 4. Phase 17
 make -C ai/patterns/graph-rag up
@@ -106,6 +106,7 @@ terraform -chdir=cloud/oracle plan
 | PHP-FPM runs as uid 82 | `permission denied` on `database/` | init container chowns and chmods; documented in A7 |
 | Fake `kubectl` always succeeds | false confidence | `tests/run.sh` includes failure cases; the doc labels the fake |
 | Bitnami tag drift | H1 breaks | `helm show values` before copying any snippet |
+| `severity: info` alerts never notify | webhook route matches but stays silent | chart's `InfoInhibitor` inhibits all info alerts; use `warning` for the test route |
 | Ollama models are host-side | eval cannot run inside the cluster | query the host endpoint from the service, never bake models into the image |
 | pgvector + Apache AGE in one image | extension availability differs per tag | tables are primary; AGE is an optional adapter |
 
@@ -171,3 +172,11 @@ git status       # must be clean before you start
 - Reverted an abandoned fake-kubectl rewrite that broke `make check`.
 - Fixed a corrupted `.gitignore` rule and moved the eval output under the pattern.
 - Recorded the Phase 16 evaluation baseline in `ai/patterns/rag/eval/results.json`.
+- Instrumented the RAG mockup and FastAPI stack with OTel; the live span id is in
+  the response, header and log line, and matches Tempo.
+- Imported the Graph-RAG scaffold, cloud notes and exercise sheet from the
+  abandoned capital-S copy, each with provenance markers.
+- Removed the capital-S copy after backing it up under `/tmp/opencode/`.
+- Enabled Alertmanager, added the in-cluster webhook receiver, and proved both
+  the synthetic `LabWebhookTest` and a real `PodNotReady` delivery.
+- Added `docs/REPO-STATE.md` as the full repository snapshot.
