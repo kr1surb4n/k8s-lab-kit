@@ -5,8 +5,11 @@ Tools:
   ask_knowledge(question, corpus)
   list_corpora()
 
-Only local models and local Postgres are used. The server never sends note or
-paper text to a remote provider.
+Only local models and local Postgres are used by this server. However, the MCP
+client sees the tool results, so connect it to an agent that runs a local model.
+A cloud-hosted agent would send note and paper excerpts to its provider.
+
+Absolute paths are removed from tool results; doc ids and local snippets remain.
 """
 from __future__ import annotations
 
@@ -36,6 +39,8 @@ def search_knowledge(query: str, corpus: str = "notes,papers", k: int = 5) -> di
     result = search(SETTINGS, dsn_for(corpus), query, corpus=corpus, k=k)
     for chunk in result["chunks"]:
         chunk["text"] = chunk["text"][:1200]
+        # Keep absolute personal paths out of the agent transcript.
+        chunk.pop("path", None)
     return result
 
 
@@ -44,9 +49,19 @@ def search_knowledge(query: str, corpus: str = "notes,papers", k: int = 5) -> di
 def ask_knowledge(question: str, corpus: str = "notes,papers") -> dict:
     """Answer a question from local notes and papers, with citations."""
     result = answer(SETTINGS, dsn_for(corpus), question, corpus=corpus)
+    citations = [
+        {
+            "doc_id": citation["doc_id"],
+            "chunk_id": citation["chunk_id"],
+            "title": citation["title"],
+            "page_start": citation["page_start"],
+            "page_end": citation["page_end"],
+        }
+        for citation in result["citations"]
+    ]
     return {
         "answer": result["answer"],
-        "citations": result["citations"],
+        "citations": citations,
         "refused": result["refused"],
         "trace_id": result["trace_id"],
     }

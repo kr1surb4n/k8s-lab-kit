@@ -139,6 +139,13 @@ Hermes then exposes three tools:
 
 Verify with `hermes mcp test graphrag`.
 
+**Use a local Hermes model for these tools.** This server makes no cloud calls,
+but the agent that consumes its results does. Hermes is currently configured
+with `gpt-oss:120b-cloud` by default; switch it to `granite3.3-8b-local` or
+`qwen3-8b-local` before asking private questions, or the retrieved note and
+paper excerpts will be sent to the cloud provider. The MCP tools strip absolute
+paths, but they necessarily return local text snippets to the agent.
+
 ## Privacy
 
 - Everything is local: Ollama at `localhost:11434`, Postgres on localhost, no
@@ -158,5 +165,7 @@ Verify with `hermes mcp test graphrag`.
   graph. Summaries without a PDF are still indexed from title, summary, and
   tags.
 - Image-only PDFs produce little or no text; OCR is not part of this phase.
+- Graph context is one hop: edges attached to the top retrieved documents. It
+  does not yet walk shared topic nodes into other documents.
 - The API loads configuration at import time. Restart it after editing
   `config.yaml`.
