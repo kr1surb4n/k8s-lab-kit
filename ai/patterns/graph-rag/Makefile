@@ -117,7 +117,7 @@ app-test:
 
 # Score the local app against the 42-question golden set.
 eval-local:
-	$(PYTHON) eval/local_eval.py
+	$(PYTHON) eval/local_eval.py --json-out eval/local-results.json
 
 # Rebuild the synthetic evaluation index with real local models.
 ingest-lab:

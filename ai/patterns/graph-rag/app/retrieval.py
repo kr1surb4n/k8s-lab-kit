@@ -174,8 +174,7 @@ def graph_context(
         edge["members"].append(name)
         edge["roles"].setdefault(role, name)
 
-    # Prefer edges from the highest-ranked documents and edges whose member
-    # names overlap the question. This keeps the path focused on the answer.
+    # Score an edge by document rank and overlap with the question.
     def edge_key(edge: dict[str, Any]) -> tuple:
         overlap = sum(
             1

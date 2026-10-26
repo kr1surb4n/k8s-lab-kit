@@ -10,7 +10,28 @@ separate graph database and no Apache AGE extension in Phase 17.
 | pgvector | 0.8.7 |
 | Vector metric | cosine (`vector_cosine_ops`), 1024 dimensions |
 | Local port | `5433` (override with `GRAPHRAG_DB_PORT`) |
+| Private port | `5434` (profile `private`, separate volume) |
 | Volume | `graph_rag_graphrag-pgdata` (named volume, survives `make db-down`) |
+| Private volume | `graph_rag_graphrag-private-pgdata` |
+
+The private database is a separate service under the compose profile
+`private`:
+
+```bash
+make private-db-up        # starts postgres-private on 5434
+make private-migrate      # applies the same schema
+make private-db-shell     # psql against graphrag_private
+make private-db-down      # stops it; the named volume keeps the index
+```
+
+The `documents.corpus` column (`lab`, `notes`, `papers`) keeps sources apart
+inside one database, while the two containers keep private data physically
+separate from the evaluation fixture. The application refuses to ingest
+`notes` or `papers` into the eval database.
+
+Chunks have optional `page_start` / `page_end` values for PDF citations; text
+and Markdown documents leave them null. Both columns are added with
+`ALTER TABLE ... IF NOT EXISTS` so an existing 17.2 database upgrades in place.
 
 ## Why no Apache AGE
 
@@ -34,8 +55,8 @@ compare. Until then, no AGE dependency, no custom image, one backup.
 
 | Table | Purpose |
 |---|---|
-| `documents` | one row per corpus document, including `sha256` and `source` JSON |
-| `chunks` | text spans with `start_offset` / `end_offset` and a generated `tsv` |
+| `documents` | one row per corpus document, including `corpus`, `sha256`, and `source` JSON |
+| `chunks` | text spans with `start_offset` / `end_offset`, optional `page_start` / `page_end`, and a generated `tsv` |
 | `embeddings` | one 1024-dim vector per chunk, with the model name |
 | `nodes` | entities, unique by `(name, type)` |
 | `edges` | a relation, `arity >= 2`; `arity >= 3` is a hyperedge |

@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -171,6 +172,32 @@ def summarize(results: list[dict]) -> dict:
     return summary
 
 
+# Return the current git commit, or an empty string outside git.
+def git_commit() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        return result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+# Return the corpus version from the manifest.
+def corpus_version() -> str:
+    try:
+        manifest = json.loads(
+            (ROOT / "corpus" / "MANIFEST.json").read_text(encoding="utf-8")
+        )
+        return manifest.get("corpus_version", "")
+    except (OSError, json.JSONDecodeError):
+        return ""
+
+
 # Parse arguments and run the golden set.
 def main() -> int:
     parser = argparse.ArgumentParser(description="Local Graph RAG evaluation")
@@ -201,9 +228,19 @@ def main() -> int:
             flush=True,
         )
     summary = summarize(results)
+    metadata = {
+        "commit": git_commit(),
+        "corpus_version": corpus_version(),
+        "stub": args.stub,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
     if args.json_out:
         args.json_out.write_text(
-            json.dumps({"summary": summary, "results": results}, indent=2, ensure_ascii=False),
+            json.dumps(
+                {"metadata": metadata, "summary": summary, "results": results},
+                indent=2,
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
         print(f"wrote {args.json_out}")
