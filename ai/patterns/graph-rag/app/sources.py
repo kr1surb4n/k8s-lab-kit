@@ -207,7 +207,7 @@ def load_file_source(source, corpus: str, limit: int | None = None) -> Iterator[
         relative = path.relative_to(root).as_posix()
         try:
             text = normalize_text(read_text_file(path))
-        except (OSError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - one bad file must not stop the run
             print(f"skip ({exc}): {relative}", file=sys.stderr)
             continue
         if not text:

@@ -16,7 +16,7 @@ from .llm import OllamaClient, StubEmbedder
 
 LOGGER = logging.getLogger("graphrag")
 REFUSAL = "The corpus does not contain enough information to answer this question."
-CITATION_RE = re.compile(r"\[([^\[\]\s]+#[^\[\]\s]+)\]")
+CITATION_RE = re.compile(r"([^\s\[\],;]+#c\d{4})")
 RRF_K = 60
 
 ANSWER_SYSTEM = (
@@ -186,6 +186,8 @@ def graph_context(
 
     result = []
     for edge in sorted(edges.values(), key=edge_key, reverse=True)[:limit]:
+        if len(edge["members"]) < 2:
+            continue
         if edge["arity"] >= 3:
             result.append(
                 {
