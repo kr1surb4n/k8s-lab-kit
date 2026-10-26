@@ -5,9 +5,13 @@ details.
 
 - **Folder:** `/home/kris/00___Castle/07__WorkShops/k8s`
 - **Date:** 2026-10-26
-- **State:** **Phases 0–16 done; Phase 17 in progress — corpus, golden set and storage schema done, ingest next (needs the GPU); Phase 18 open**
+- **State:** **Phases 0–16 done; Phase 17 local app, lab ingest, private notes/papers index and eval baseline done; optional packaging remains; Phase 18 open**
 - **Git:** repository on `main`; conventional commits, one change per commit
-- **Offline gate:** `make test` → **38 passed, 0 failed**
+- **Offline gate:** `make test` → **38 passed, 0 failed**; `make app-test` → **36 passed, 0 failed**
+- **Private tool:** `ai/patterns/graph-rag/app/`, private DB on `5434`; see
+  `app/README.md` and `~/.config/graphrag/config.yaml` (0600, not in git)
+- **Local eval:** recall@k 1.00, citation precision 0.75, strict facts 0.825,
+  graph path 0.7875, refusal 1.00, p50 2,364 ms / p95 3,266 ms (42 questions)
 - **Cluster:** minikube **stopped** (start with `make cluster`); the observability stack and its data are still defined, not running
 - **Full snapshot:** `docs/REPO-STATE.md`
 
@@ -21,9 +25,10 @@ precedence), A4 (LAN access from a second machine), A5 (basic-auth Secret),
 A6 (3 replicas + rolling update), A7 (nginx + PHP-FPM + PostgreSQL + SQLite).
 The expansion tracks followed: boilerplates and paczki (12), recovery drills (13),
 eight stack templates (14), the metrics/logs/traces stack (15), and the RAG
-pattern with a recorded evaluation baseline (16). Graph RAG (17) and the cloud
-free-tier experiment (18) are the remaining phases; see
-`analysis/07-what-to-do.md`.
+pattern with a recorded evaluation baseline (16). Graph RAG (17) now has a real
+local app over the synthetic lab corpus plus the private notes and papers, with
+a recorded golden-set baseline; optional packaging remains. The cloud free-tier
+experiment (18) is still open; see `analysis/07-what-to-do.md`.
 
 ## What is done and verified
 
@@ -45,6 +50,8 @@ free-tier experiment (18) are the remaining phases; see
 | Offline test suite | `tests/run.sh` → 38 passed |
 | Phase 17 corpus + golden set | `ai/patterns/graph-rag/corpus/`, `eval/golden_qa.jsonl`; `make corpus-check` |
 | Phase 17 storage schema | `ai/patterns/graph-rag/db/schema.sql`; `make db-check` → 8 tables, idempotent, hyperedge ok |
+| Phase 17 local app + private index | `ai/patterns/graph-rag/app/`; notes 179 docs / 1,608 chunks / 1,204 edges; papers 861 / 24,745 / 7,021; CLI, HTTP, MCP verified |
+| Phase 17 local eval baseline | `make eval-local`; recall 1.00, citations 0.75, facts 0.825, graph 0.7875, refusal 1.00 |
 | Coat module, spells, installer | `coat/` (installer tested with `--dry-run`) |
 | Observability full stack (Prometheus, Grafana, Loki, Tempo, OTel) | `observability/`, running in `observability` namespace |
 | Alertmanager → in-cluster webhook | `observability/alert-webhook/`, proof in `docs/example-runs.md` §9 |

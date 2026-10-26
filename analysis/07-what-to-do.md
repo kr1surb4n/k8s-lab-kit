@@ -19,9 +19,9 @@ HEAD: `0856b88` before the Phase 17 model-selection commit; see `git log -1`
 | Phase 14 — other stacks | **done** | `boilerplates/stacks/` (8 stacks), commit `da0b869` |
 | Phase 15 — observability | **done** | commits `5e920a2`, `fffdfc0`; trace and webhook proofs in `docs/example-runs.md` §8–§9 |
 | Phase 16 — RAG pattern | **done** | `ai/patterns/rag/`, commits `c1adaae` … `f7b0f3c` |
-| Phase 17 — Graph RAG | **scaffold + model set ready; implementation not started** | `ai/patterns/graph-rag/`, `ai/patterns/graph-rag/models/README.md` |
+| Phase 17 — Graph RAG | **local app, private notes/papers index, and local eval baseline done; optional packaging open** | `ai/patterns/graph-rag/app/`, private DB on 5434, `app/README.md` |
 | Phase 18 — cloud free tier | **not started** | same |
-| `make test` | **36/36 green** | verified on a clean checkout of `HEAD` |
+| `make test` | **38/38 green** | verified on a clean checkout of `HEAD` |
 | minikube | **running** | control plane, kubelet, apiserver up |
 | Host headroom | ~151 GiB free disk, ~11 GiB available RAM | `df -h /`, `free -h` |
 
@@ -38,7 +38,7 @@ Two cleanup items were done while writing this description:
 
 ## 2. Cleanup before new phases (S, do first)
 
-- [ ] Re-run `make test` and confirm 36/36 after the two cleanup edits.
+- [x] Re-run `make test` and confirm 38/38 after the two cleanup edits.
 - [ ] Decide what to do with the untracked `eval/results.json` (it is the Phase 16
       RAG eval output). Keep it ignored, or move it to `ai/patterns/rag/eval/`
       and commit a baseline. Do not commit it at the repo root.
@@ -52,7 +52,7 @@ Two cleanup items were done while writing this description:
 - [ ] Confirm the observability namespace is still healthy after the reboot/test
       cycle: `kubectl -n observability get pods`.
 
-**Verify:** `make test` 36/36, `git status` clean except intentionally ignored
+**Verify:** `make test` 38/38, `git status` clean except intentionally ignored
 files, `resume.md` matches the commit log.
 
 ---
@@ -79,69 +79,96 @@ justifies it. See `ai/patterns/graph-rag/models/README.md`.
 when the models were verified. Stop it only if it is yours; otherwise the 8B
 model runs on CPU (correct but slow).
 
+### Local private extension (2026-10-26)
+
+The Phase 17 app is also a working local tool over the personal notes in
+`~/Documents` and the paper library under `~/00___Castle/99_TEMP/download-papers`.
+It deliberately does not use a cluster for private data:
+
+- **Eval DB:** `graphrag` on `5433`, corpus `lab`, 20 documents / 42 golden
+  questions. Private corpora are rejected by the CLI guard.
+- **Private DB:** `graphrag_private` on `5434`, corpora `notes` and `papers`, own
+  named volume and compose profile `private`.
+- **Notes index:** 179 documents, 1,608 chunks/embeddings, 1,204 edges. Includes
+  PDFs, DOCX, Markdown, text, and saved HTML up to 30 MB.
+- **Papers index:** 861 documents, 24,745 chunks/embeddings, 7,021 edges. 634
+  have full PDF text, 227 are summary-only. Graph edges come from summary tags
+  (`HAS_TOPIC`, `COVERS_TOPICS`), not 861 LLM calls.
+- **Interfaces:** CLI (`app/cli.py`), HTTP (`POST /v1/search`, `POST /v1/ask`),
+  MCP stdio (`search_knowledge`, `ask_knowledge`, `list_corpora`).
+- **Privacy:** local Ollama and local Postgres only; config at
+  `~/.config/graphrag/config.yaml` (0600, git-ignored). MCP strips absolute
+  paths, but Hermes must use a local model (`granite3.3-8b-local` or
+  `qwen3-8b-local`), not the default `gpt-oss:120b-cloud`, or snippets leave
+  the machine.
+
 ### 17.1 Corpus and golden set (M)
 
-- [ ] A 20-document sample corpus with known answers, committed to the repo.
-- [ ] Provenance per chunk: source path, page/section, SHA-256 of the source,
-      corpus version.
-- [ ] A golden question set of 30–50 questions, each with:
+- [x] A 20-document sample corpus with known answers, committed to the repo.
+- [x] Provenance per chunk: source path, page/section, SHA-256 of the source,
+      corpus version (plus optional PDF page numbers).
+- [x] A golden question set of 42 questions, each with:
       `question`, `expected_doc_ids`, `expected_answer_facts`, `must_cite`.
-- [ ] A "trap" subset that only the graph layer can answer (relation questions).
+- [x] A "trap" subset that only the graph layer can answer (relation questions).
 
 **Acceptance:** every golden question is answerable from the corpus alone, and a
 human can check the expected citations by hand.
 
 ### 17.2 Storage schema (M)
 
-- [ ] Postgres with `pgvector` and Apache AGE enabled (same instance as the RAG
-      pattern; document the image/tag that ships both).
-- [ ] Tables: `documents`, `chunks`, `embeddings`, `nodes`, `edges`,
-      `edge_nodes(edge_id, node_id, role)`, `provenance`.
-- [ ] Idempotent migrations (`schema.sql` + `make migrate`), safe to re-run.
-- [ ] Indexes: HNSW/IVFFlat on the vector column, GIN/tsvector for BM25,
-      indexes on both sides of `edge_nodes`.
+- [x] Postgres with `pgvector`; Apache AGE is **not** used. The graph is plain
+      tables and recursive CTEs. Two databases: eval on 5433, private on 5434.
+- [x] Tables: `documents` (with `corpus`), `chunks` (with page numbers),
+      `embeddings`, `nodes`, `edges`, `edge_nodes`, `provenance`.
+- [x] Idempotent migrations (`schema.sql` + `make migrate` / `private-migrate`).
+- [x] Indexes: HNSW cosine on vectors, GIN on tsvector, edge membership indexes.
 
 **Acceptance:** `make migrate` twice produces the same schema and exit 0.
 
 ### 17.3 Ingest job (M–L)
 
-- [ ] Chunk (fixed size + overlap; record offsets).
-- [ ] Embed on the host GPU (`bge-m3-local`; `nomic-embed-text-v1.5` as the
-      fallback), with a deterministic stub embedder so the eval can run without
-      a GPU.
-- [ ] Extract entities and relations; write both pairwise edges and at least one
-      real hyperedge (3+ members) to prove the model.
-- [ ] Write provenance for every row.
-- [ ] Re-running ingest does not duplicate rows (upsert by document hash + chunk id).
+- [x] Chunk (fixed size + overlap; record offsets and PDF page numbers).
+- [x] Embed on the host GPU (`bge-m3-local`) with a deterministic stub embedder
+      for offline tests.
+- [x] Extract entities and relations; pairwise edges plus real hyperedges
+      (lab `OWNS/REQUIRES`, paper `COVERS_TOPICS`).
+- [x] Write provenance for every chunk, node, and edge.
+- [x] Re-running ingest skips unchanged documents by content hash; `--prune`
+      removes missing files; each document commits separately.
 
 **Acceptance:** row counts after a second run are identical; the hyperedge join
 table returns the expected 3-member relation for a known document set.
 
 ### 17.4 Retrieval service (L)
 
-- [ ] One small Python service in the cluster (`ai/patterns/graph-rag/app/`).
-- [ ] Pipeline: rewrite → hybrid retrieve (BM25 + vector, reciprocal-rank fusion)
-      → graph expand (2 hops or hyperedge members) → rerank → answer + citations.
-- [ ] Rerank with a listwise LLM prompt on `granite3.3-8b-local` first; add the
-      `BAAI/bge-reranker-v2-m3` cross-encoder only if the eval shows a gain.
-- [ ] Response contract: `answer`, `citations[]` (doc id, chunk id, span),
-      `graph_path[]`, `scores`, `trace_id`, `prompt_version`, `model_version`.
-- [ ] OpenTelemetry spans exported to Tempo; the `trace_id` also appears in the
-      structured log line.
-- [ ] Guardrails: refuse when retrieval score is below a threshold; never cite a
-      chunk that was not retrieved.
+- [x] One small Python service, run on the host as CLI, HTTP, and MCP
+      (`ai/patterns/graph-rag/app/`); Kubernetes packaging is not done.
+- [~] Hybrid retrieve (Postgres ts_rank + vector, RRF k=60) → one-hop graph
+      context. No query rewrite, no two-hop expansion.
+- [ ] Rerank with a listwise LLM prompt; deferred. RRF order goes to the
+      generator in the current app.
+- [x] Response contract: `answer`, `citations[]` (doc id, chunk id, span,
+      page), `graph_path[]`, `scores`, `trace_id`, `prompt_version`,
+      `model_version`.
+- [ ] OpenTelemetry spans. The app writes a structured log line with the same
+      `trace_id`; no exporter or Tempo.
+- [x] Guardrails: refuse below the cosine threshold, and only cite a chunk that
+      was actually retrieved.
 
 **Acceptance:** a question returns an answer whose citations resolve to real
 chunks; a relation-only question returns the graph path that justified it.
 
 ### 17.5 Evaluation harness (M)
 
-- [ ] `eval.py` computes recall@k, citation precision, faithfulness, latency
-      p50/p99, and graph-path hit rate.
-- [ ] Writes `results.json` with the git commit and corpus version.
-- [ ] `make eval` runs it offline (stub embedder/generator) and with the real
-      models.
-- [ ] Record a baseline in the phase README; later runs compare against it.
+- [x] `eval/local_eval.py` computes recall@k, citation precision, strict
+      answer-fact match, refusal correctness, latency p50/p95, and graph-path
+      hit rate.
+- [x] Writes JSON with the git commit and corpus version.
+- [~] `make eval-local` runs against the real lab index. Offline determinism is
+      covered by 36 app tests; a full stub golden run would need a separate DB.
+- [x] Record the real baseline: recall@k 1.00, citation precision 0.75, strict
+      fact match 0.825, graph-path accuracy 0.7875, refusal correctness 1.00,
+      latency p50 2,364 ms / p95 3,266 ms at commit `b005ffb`.
 
 **Acceptance:** two consecutive offline runs produce identical scores; the real
 run is recorded with its commit hash.
@@ -154,6 +181,10 @@ run is recorded with its commit hash.
       loudly, not silently fall back to a confident wrong answer.
 - [ ] Document both outcomes in `failure-modes.md` with the metric each one moves.
 
+Not run as a destructive drill yet. The observed ingest failures (NUL bytes,
+bad edge ids, filtered HNSW, truncated extraction) are documented with their
+fixes in `failure-modes.md`.
+
 ### 17.7 Kubernetes packaging (M)
 
 - [ ] `ai/patterns/graph-rag/k8s/` with kustomize base + overlay, non-root,
@@ -162,6 +193,9 @@ run is recorded with its commit hash.
 - [ ] NetworkPolicy allowing only Postgres + OTel collector.
 - [ ] Honest resource note: Postgres+AGE+pgvector plus the service must fit
       alongside the observability stack on a 6 GiB minikube.
+
+Deferred: the private tool runs on the host by design so personal notes do not
+enter the lab cluster. The lab corpus still has no in-cluster service.
 
 **Verify (Phase 17 done):**
 `make -C ai/patterns/graph-rag up` → `make eval` → `make -C ai/patterns/graph-rag down`,
@@ -242,7 +276,7 @@ step passes. Do not start Phase 18 until Phase 17's baseline score is recorded.
 
 ## 8. Definition of done for the whole kit
 
-- `make test` → 36/36 on a clean checkout.
+- `make test` → 38/38 on a clean checkout.
 - Phases 0–18 each have: commands, expected output, a verification step, and a
   transcript or recorded score.
 - `analysis/02-todo.md`, `resume.md`, `docs/coverage-matrix.md` describe what
