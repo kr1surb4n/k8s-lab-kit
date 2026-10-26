@@ -1,7 +1,10 @@
 """Retrieval helper tests that do not need a database."""
 import unittest
+from unittest.mock import patch
 
+from app.config import Settings
 from app.retrieval import (
+    GRAPH_ERROR,
     build_context,
     corpora_list,
     find_citations,
@@ -100,6 +103,83 @@ class RetrievalTests(unittest.TestCase):
         path = graph_context(conn, ["doc-01"], hops=1)
         self.assertEqual(len(path), 1)
         self.assertEqual(len(conn.sql), 1)
+
+
+class AnswerGraphGuardTests(unittest.TestCase):
+    # A fake retrieval result that mimics the shape of _search_impl's output.
+    def _retrieved(self, graph_path):
+        return {
+            "chunks": [
+                {
+                    "chunk_id": "doc-09#c0001",
+                    "doc_id": "doc-09",
+                    "title": "Recovery drills",
+                    "path": "doc-09-recovery.md",
+                    "text": "Readiness probes decide when a pod is ready.",
+                    "start": 10,
+                    "end": 120,
+                    "page_start": None,
+                    "page_end": None,
+                    "score": 0.9,
+                    "vector_score": 0.9,
+                    "lexical_score": 0.0,
+                    "rrf": 0.9,
+                }
+            ],
+            "graph_path": graph_path,
+            "graph_hops": 1,
+            "rerank": False,
+            "rerank_model": "",
+        }
+
+    def test_answer_fails_loudly_when_graph_is_empty(self):
+        from app.retrieval import _answer_impl
+
+        settings = Settings(require_graph=True)
+        with patch("app.retrieval.search", return_value=self._retrieved([])) as fake:
+            response = _answer_impl(settings, "postgresql://unused", "Which exercise uses a hostPath?")
+        self.assertEqual(response["answer"], GRAPH_ERROR)
+        self.assertTrue(response["refused"])
+        self.assertEqual(response["graph_error"], "graph_path_empty")
+        self.assertEqual(response["citations"], [])
+        self.assertEqual(response["graph_path"], [])
+        fake.assert_called_once()
+
+    def test_answer_uses_the_settings_default_for_the_guard(self):
+        from app.retrieval import _answer_impl
+
+        settings = Settings(require_graph=True)
+        with patch("app.retrieval.search", return_value=self._retrieved([])):
+            response = _answer_impl(settings, "postgresql://unused", "Which exercise uses a hostPath?")
+        self.assertEqual(response["graph_error"], "graph_path_empty")
+
+    def test_answer_answers_normally_when_graph_context_exists(self):
+        from app.retrieval import _answer_impl
+
+        settings = Settings()
+        with patch(
+            "app.retrieval.search",
+            return_value=self._retrieved(
+                [
+                    {
+                        "relation": "DEMONSTRATES",
+                        "source": "A6",
+                        "target": "readiness probe",
+                        "document_id": "doc-09",
+                        "hop": 1,
+                    }
+                ]
+            ),
+        ):
+            response = _answer_impl(
+                settings, "postgresql://unused", "What does the readiness drill show?",
+                stub=True,
+            )
+        self.assertNotIn("graph_error", response)
+        self.assertFalse(response["refused"])
+        self.assertEqual(len(response["citations"]), 1)
+        self.assertEqual(response["citations"][0]["chunk_id"], "doc-09#c0001")
+        self.assertEqual(response["citations"][0]["doc_id"], "doc-09")
 
 
 if __name__ == "__main__":

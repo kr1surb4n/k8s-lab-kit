@@ -119,6 +119,10 @@ actually retrieved. Each response carries a `trace_id`, model version, prompt
 version, latency, cosine and RRF scores, and graph edges attached to the
 retrieved documents. `--rerank` adds one local listwise LLM call; the response
 sets `rerank` and `rerank_model`. If the call fails, the RRF order is kept.
+`ask --require-graph` (or `require_graph: true` in the private config) fails
+loudly with a graph error when the graph layer has no context, instead of
+answering from chunk context alone. See
+[`examples/failure-drills.md`](../examples/failure-drills.md).
 
 ## HTTP API
 

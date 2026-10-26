@@ -38,6 +38,9 @@ rerank: false
 rerank_candidates: 20
 rerank_model: ""   # empty = use models.generate
 
+# Fail loudly on relation questions when the graph layer has no context.
+require_graph: false
+
 # Optional OpenTelemetry spans. Attributes contain counts and settings only;
 # question and passage text are never added to a span.
 otel:

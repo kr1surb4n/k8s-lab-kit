@@ -18,6 +18,7 @@ from .telemetry import configure_telemetry, current_trace_id, span
 
 LOGGER = logging.getLogger("graphrag")
 REFUSAL = "The corpus does not contain enough information to answer this question."
+GRAPH_ERROR = "The graph context is unavailable for this relation question."
 RRF_K = 60
 
 ANSWER_SYSTEM = (
@@ -451,15 +452,20 @@ def answer(
     stub: bool = False,
     graph_hops: int | None = None,
     rerank: bool | None = None,
+    require_graph: bool | None = None,
 ) -> dict[str, Any]:
     configure_telemetry(settings)
     effective_top_k = top_k or settings.answer_top_k
+    effective_require_graph = (
+        require_graph if require_graph is not None else settings.require_graph
+    )
     with span(
         "graphrag.answer",
         {
             "graphrag.corpus": corpus or "",
             "graphrag.top_k": effective_top_k,
             "graphrag.question_length": len(question),
+            "graphrag.require_graph": effective_require_graph,
             "graphrag.stub": stub,
         },
     ) as current:
@@ -472,6 +478,7 @@ def answer(
             stub=stub,
             graph_hops=graph_hops,
             rerank=rerank,
+            require_graph=effective_require_graph,
         )
         if current is not None:
             current.set_attribute("graphrag.citations", len(response["citations"]))
@@ -492,9 +499,11 @@ def _answer_impl(
     stub: bool = False,
     graph_hops: int | None = None,
     rerank: bool | None = None,
+    require_graph: bool | None = None,
 ) -> dict[str, Any]:
     top_k = top_k or settings.answer_top_k
     graph_hops = graph_hops or settings.graph_hops
+    require_graph = require_graph if require_graph is not None else settings.require_graph
     trace_id = current_trace_id() or secrets.token_hex(16)
     started = time.time()
     retrieved = search(
@@ -511,6 +520,27 @@ def _answer_impl(
     chunks = retrieved["chunks"]
     top_score = max((chunk["vector_score"] for chunk in chunks), default=0.0)
     has_lexical = any(chunk["lexical_score"] > 0 for chunk in chunks)
+
+    # A relation-only check must fail visibly when the graph layer is empty.
+    if require_graph and not retrieved["graph_path"]:
+        response = {
+            "answer": GRAPH_ERROR,
+            "citations": [],
+            "graph_path": [],
+            "chunks": chunks,
+            "scores": {"top_vector": top_score, "top_rrf": 0.0},
+            "trace_id": trace_id,
+            "prompt_version": "p1",
+            "model_version": "stub-hash-1024" if stub else settings.generate_model,
+            "latency_ms": int((time.time() - started) * 1000),
+            "refused": True,
+            "graph_error": "graph_path_empty",
+            "graph_hops": retrieved["graph_hops"],
+            "rerank": retrieved["rerank"],
+            "rerank_model": retrieved["rerank_model"],
+        }
+        _log(response, question)
+        return response
 
     # A guardrail: refuse when retrieval found nothing convincing.
     if not chunks or (top_score < 0.20 and not has_lexical):

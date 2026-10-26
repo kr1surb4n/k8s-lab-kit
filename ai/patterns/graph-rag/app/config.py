@@ -88,6 +88,7 @@ class Settings:
     rerank: bool = False
     rerank_candidates: int = 20
     rerank_model: str = ""
+    require_graph: bool = False
     otel_enabled: bool = False
     otel_endpoint: str = "http://localhost:4318/v1/traces"
     otel_service_name: str = "graphrag-local"
@@ -150,6 +151,7 @@ def load_settings(path: Path | None = None) -> Settings:
         rerank=bool(data.get("rerank", Settings.rerank)),
         rerank_candidates=int(data.get("rerank_candidates", Settings.rerank_candidates)),
         rerank_model=str(data.get("rerank_model", Settings.rerank_model) or ""),
+        require_graph=bool(data.get("require_graph", Settings.require_graph)),
         otel_enabled=bool(otel.get("enabled", Settings.otel_enabled)),
         otel_endpoint=str(otel.get("endpoint", Settings.otel_endpoint)),
         otel_service_name=str(otel.get("service_name", Settings.otel_service_name)),

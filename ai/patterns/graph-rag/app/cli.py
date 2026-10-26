@@ -137,6 +137,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
         stub=args.stub,
         graph_hops=args.graph_hops,
         rerank=args.rerank or None,
+        require_graph=args.require_graph or None,
     )
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -229,6 +230,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     ask.add_argument(
         "--rerank", action="store_true", help="rerank fused candidates with the local LLM"
+    )
+    ask.add_argument(
+        "--require-graph",
+        action="store_true",
+        help="fail loudly when the graph layer has no context for a relation question",
     )
     ask.add_argument("--stub", action="store_true")
     ask.add_argument("--json", action="store_true")

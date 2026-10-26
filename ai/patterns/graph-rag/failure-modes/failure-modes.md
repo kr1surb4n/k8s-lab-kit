@@ -20,11 +20,24 @@ a design that was not built.
 | 12 | GPU out of memory | Too many models or a large context | `ollama ps`; Ollama error | One 8B model at a time, `num_ctx=4096`, 900 output tokens |
 | 13 | `PostgreSQL text fields cannot contain NUL` | A PDF or HTML file contains `0x00` bytes | Ingest aborts on `DataError` | `normalize_text` strips NUL; per-document commit resumes at the failed file |
 | 14 | A notes query returns no chunks while similar notes exist | HNSW filters `documents.corpus` after the index scan; top global neighbours can all be papers | Polish notes query returns `[]`; same query on an unfiltered scan returns rows | Force an exact vector scan at this index size. Revisit partial indexes or iterative HNSW above ~1M chunks |
+| 15 | A relation question is answered with no graph context after the graph layer was emptied | The answer path never required a graph context, so it answered from chunk context alone | `graph_error: "graph_path_empty"` in the answer; run with `require_graph` to fail loudly | Enable the guard (`require_graph: true` or `ask --require-graph`); keep it on for relation questions |
+
+## Destructive drills
+
+Phase 17 acceptance drills run against the evaluation database and are always
+restored afterwards (see [`examples/failure-drills.md`](../examples/failure-drills.md)):
+
+- **Deleted cited document**: delete a document that a golden answer cites and
+  check that the answer changes and the citation disappears. Metric moved:
+  citation precision.
+- **Empty graph layer**: empty `edge_nodes` and ask a relation question with
+  `require_graph`. Expected: a loud refusal with `graph_error: "graph_path_empty"`.
+  Metric moved: graph-path accuracy and refusal correctness.
 
 ## Local checks
 
 ```bash
-make app-test                 # 36 offline tests, no GPU or database
+make app-test                 # offline tests for the app, no GPU or database
 make eval-local               # 42-question golden set against the eval DB
 .venv/bin/python -m app.cli stats
 curl -s localhost:8099/healthz | jq

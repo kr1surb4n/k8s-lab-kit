@@ -48,6 +48,7 @@ class AskRequest(BaseModel):
     top_k: int | None = Field(default=None, ge=1, le=30)
     graph_hops: int | None = Field(default=None, ge=1, le=2)
     rerank: bool | None = None
+    require_graph: bool | None = None
     stub: bool = False
 
 
@@ -116,6 +117,7 @@ def api_ask(request: AskRequest) -> dict:
             stub=request.stub,
             graph_hops=request.graph_hops,
             rerank=request.rerank,
+            require_graph=request.require_graph,
         )
     except OllamaError as exc:
         raise HTTPException(status_code=502, detail=f"model error: {exc}") from exc
