@@ -534,3 +534,55 @@ One trap: the first version labelled the test alert `severity: info`. The
 chart's default `InfoInhibitor` rule suppresses every `info` alert, so the route
 matched (`receivers: [lab-webhook]`) but Alertmanager never notified. Changing
 the label to `warning` made it active and delivered.
+
+## 10. Phase 17 corpus and schema — real
+
+Run on 2026-10-26 against the local docker daemon. No cluster and no models.
+
+```console
+$ cd ai/patterns/graph-rag
+$ make corpus-check
+python3 corpus/tools/validate_corpus.py
+corpus ok: 20 documents, version 2026-10-26.1, 42 questions (30 answerable, 10 relation, 2 refusal)
+
+$ make db-check
+./db/check_schema.sh
+waiting for postgres...
+schema applied
+waiting for postgres...
+schema applied
+NOTICE:  hyperedge ok: {smoke-nginx,smoke-php,smoke-host}
+schema ok: 8 tables, migrate is idempotent, hyperedge round-trip ok
+```
+
+The database after both runs:
+
+```console
+$ docker compose exec -T postgres psql -tA -U graphrag -d graphrag \
+    -c "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY 1;"
+chunks
+documents
+edge_nodes
+edge_summary
+edges
+embeddings
+nodes
+provenance
+schema_migrations
+
+$ docker compose exec -T postgres psql -tA -U graphrag -d graphrag \
+    -c "SELECT 'indexes=' || count(*) FROM pg_indexes WHERE schemaname='public';"
+indexes=21
+```
+
+What this proves, and what it does not:
+
+- The corpus and the golden set are self-consistent: every expected answer fact
+  exists in a cited document, every cited id exists, and every document is cited
+  at least once.
+- `migrate` is idempotent: the second `pg_dump --schema-only` is byte-identical
+  after filtering pg_dump's random `\restrict` token.
+- The hyperedge encoding round-trips: one `edges` row with `arity = 3` and three
+  `edge_nodes` rows comes back from `edge_summary` with the members in order.
+- It does **not** prove retrieval quality. There are no embeddings or answers
+  yet; that is Phase 17.3 and 17.4.

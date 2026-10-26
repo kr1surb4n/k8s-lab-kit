@@ -5,10 +5,10 @@ details.
 
 - **Folder:** `/home/kris/00___Castle/07__WorkShops/k8s`
 - **Date:** 2026-10-26
-- **State:** **Phases 0–16 done; Phase 17 scaffold and local model set ready, implementation not started; Phase 18 open**
+- **State:** **Phases 0–16 done; Phase 17 in progress — corpus, golden set and storage schema done, ingest next (needs the GPU); Phase 18 open**
 - **Git:** repository on `main`; conventional commits, one change per commit
-- **Offline gate:** `make test` → **36 passed, 0 failed**
-- **Cluster:** minikube running; `observability` healthy with Alertmanager and the webhook receiver
+- **Offline gate:** `make test` → **38 passed, 0 failed**
+- **Cluster:** minikube **stopped** (start with `make cluster`); the observability stack and its data are still defined, not running
 - **Full snapshot:** `docs/REPO-STATE.md`
 
 ## One paragraph
@@ -42,7 +42,9 @@ free-tier experiment (18) are the remaining phases; see
 | Four recovery drills (inject/recover) | `recovery/`, `scripts/lab-drill.sh` |
 | Scripts: up, down, status, scale, rollout, tunnel, verify, doctor, env, mkpasswd, cluster-create, cluster-delete | `scripts/` |
 | Fake kubectl for offline transcripts | `scripts/demo/kubectl` |
-| Offline test suite | `tests/run.sh` → 36 passed |
+| Offline test suite | `tests/run.sh` → 38 passed |
+| Phase 17 corpus + golden set | `ai/patterns/graph-rag/corpus/`, `eval/golden_qa.jsonl`; `make corpus-check` |
+| Phase 17 storage schema | `ai/patterns/graph-rag/db/schema.sql`; `make db-check` → 8 tables, idempotent, hyperedge ok |
 | Coat module, spells, installer | `coat/` (installer tested with `--dry-run`) |
 | Observability full stack (Prometheus, Grafana, Loki, Tempo, OTel) | `observability/`, running in `observability` namespace |
 | Alertmanager → in-cluster webhook | `observability/alert-webhook/`, proof in `docs/example-runs.md` §9 |
@@ -54,13 +56,14 @@ free-tier experiment (18) are the remaining phases; see
 
 ## What is not done
 
-1. **Phase 17 — Graph RAG.** Corpus, pgvector/AGE schema, ingest, hybrid +
-   2-hop retrieval, rerank, eval harness, k8s packaging. A cleaned scaffold was
-   imported from the abandoned capital-S copy and is marked in
-   `ai/patterns/graph-rag/PROVENANCE.md`; it is mock-only. The local model set
-   is chosen and imported (`bge-m3-local` + `granite3.3-8b-local`, with
-   `qwen3-8b-local` as fallback), but the implementation has not started. The
-   detailed checklist is `analysis/07-what-to-do.md` §3 and the model setup is
+1. **Phase 17 — Graph RAG.** §17.1 (corpus, provenance, golden set) and §17.2
+   (schema, idempotent migrate, hyperedge encoding) are **done**. Remaining:
+   §17.3 ingest (chunk, embed on the GPU, extract entities/relations, provenance),
+   §17.4 retrieval service, §17.5 evaluation harness, §17.6 failure acceptance,
+   §17.7 Kubernetes packaging. The corpus is 20 documents; the golden set is 42
+   questions (30 answerable, 10 relation, 2 refusals). The imported scaffold in
+   `ai/patterns/graph-rag/mockup/` is still mock-only and is not the deliverable.
+   The detailed checklist is `analysis/07-what-to-do.md` §3; the model setup is
    `ai/patterns/graph-rag/models/README.md`.
 2. **Phase 18 — cloud free tier.** Plan-only until an account is provided; the
    deliverable is provider docs, Terraform validated with `terraform plan`, the
@@ -98,9 +101,12 @@ curl -s http://localhost:11434/api/chat \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["message"]["content"])'
 # expect ok
 
-# 5. Phase 17 — build the corpus and schema first; the imported mockup is not the deliverable
-sed -n '61,156p' analysis/07-what-to-do.md
-# Implement §17.1–§17.3, then the retrieval service and eval.
+# 5. Phase 17 — corpus and schema are already in place; check them first
+cd ai/patterns/graph-rag
+make corpus-check                  # 20 documents, 42 questions
+make db-check                      # 8 tables, idempotent, hyperedge ok
+# Next: §17.3 ingest. It embeds the corpus with bge-m3-local on the GPU and
+# extracts relations with granite3.3-8b-local. Check nvidia-smi first.
 # See ai/patterns/graph-rag/models/README.md for the model commands.
 
 # 6. Phase 18 — plan only until an account exists
@@ -207,3 +213,11 @@ git status       # must be clean before you start
   `qwen3-8b-local`; added the missing chat templates.
 - Recorded the model setup in `ai/patterns/graph-rag/models/` and updated the
   Phase 17 docs.
+- Phase 17.1: added the 20-document corpus with hashes and provenance, the
+  42-question golden set, a manifest generator and a validator, and wired the
+  check into `make test` (38 assertions).
+- Phase 17.2: added the idempotent Postgres 16 + pgvector schema, a local
+  compose file, `make migrate`, and `make db-check` proving that a second
+  migrate is a no-op and that a 3-member hyperedge round-trips.
+- Found and fixed a runbook error: A5 claimed the mounted Secret was `0400`
+  while the manifest sets `0644` so the non-root nginx worker can read it.

@@ -325,7 +325,9 @@ kubectl get secret web-basic-auth -n k8s-lab -o yaml
 kubectl exec deploy/web -n k8s-lab -- ls -l /etc/nginx/auth/.htpasswd
 ```
 
-Expected: `data` is base64, the mounted file is `-r--------` (`0400`).
+Expected: `data` is base64, and the mounted file is readable by the nginx worker
+(the manifest sets `defaultMode: 0644`; a stricter mode needs matching file
+ownership, because the nginx workers do not run as root).
 
 Make your own credential instead of the demo one:
 
