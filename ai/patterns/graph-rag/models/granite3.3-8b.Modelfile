@@ -1,0 +1,10 @@
+# Granite 3.3 8B Instruct (Q4_K_M) for Phase 17 generation.
+# The path is specific to this workstation; replace it on another machine.
+FROM /home/kris/Downloads/granite-3.3-8b-instruct-Q4_K_M.gguf
+TEMPLATE """{{- if .System }}<|start_of_role|>system<|end_of_role|>{{ .System }}<|end_of_text|>
+{{ end }}{{- range .Messages }}<|start_of_role|>{{ .Role }}<|end_of_role|>{{ .Content }}<|end_of_text|>
+{{ end }}<|start_of_role|>assistant<|end_of_role|>"""
+PARAMETER num_ctx 8192
+PARAMETER temperature 0.2
+PARAMETER stop "<|end_of_text|>"
+PARAMETER stop "<|start_of_role|>"

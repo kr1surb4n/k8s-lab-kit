@@ -1,0 +1,14 @@
+# Qwen3 8B (Q4_K_M) fallback generator for Phase 17.
+# Add /no_think to the user or system message to skip its default thinking mode.
+# The path is specific to this workstation; replace it on another machine.
+FROM /home/kris/Downloads/Qwen3-8B-Q4_K_M.gguf
+TEMPLATE """{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}{{- range .Messages }}<|im_start|>{{ .Role }}
+{{ .Content }}<|im_end|>
+{{ end }}<|im_start|>assistant
+"""
+PARAMETER num_ctx 8192
+PARAMETER temperature 0.2
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|endoftext|>"
