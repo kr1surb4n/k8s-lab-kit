@@ -1,6 +1,6 @@
 # setuptools <81 still ships pkg_resources, which the OTel instrumentation imports.
 setuptools==70.3.0
-fastapi==0.110.1
+fastapi==0.161.1
 uvicorn[standard]==0.29.0
 pydantic==2.7.1
 pydantic-settings==2.3.3
