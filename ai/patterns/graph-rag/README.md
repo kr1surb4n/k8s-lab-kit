@@ -71,21 +71,36 @@ verification commands.
 - Rerank: listwise LLM prompt with Granite first; add a cross-encoder only if
   the evaluation justifies it.
 
-## Graph Schema (Apache AGE)
+## Graph schema (plain Postgres)
 
-```cypher
-// Node types
-(:Document {id, title, content, metadata})
-(:Chunk {id, doc_id, text, embedding, position})
-(:Entity {id, name, type, description})
-(:Relationship {id, source, target, type, weight})
+The graph is stored in Postgres, not Apache AGE. See [`db/README.md`](db/README.md)
+for the decision and the R18 comparison plan.
 
-// Relationships
-(:Chunk)-[:PART_OF]->(:Document)
-(:Chunk)-[:MENTIONS]->(:Entity)
-(:Entity)-[:RELATES_TO {type, weight}]->(:Entity)
-(:Chunk)-[:CONTAINS]->(:Entity)
-```
+| Table | Purpose |
+|---|---|
+| `documents` | corpus documents with `sha256`, version, and source metadata |
+| `chunks` | text spans with offsets, a generated `tsv`, and a content hash |
+| `embeddings` | one 1024-dim `bge-m3` vector per chunk (HNSW, cosine) |
+| `nodes` | entities, unique by `(name, type)` |
+| `edges` | relations with `arity`; `arity >= 3` is a hyperedge |
+| `edge_nodes` | edge members with a role and an ordered position |
+| `provenance` | table + row + document + chunk + source hash + corpus version |
+
+A hyperedge is one `edges` row plus its `edge_nodes` members. The
+`edge_summary` view returns each edge with its ordered member names, so "which
+three components jointly serve the page" is one query, not three pairwise joins.
+
+The Phase 16 RAG pattern is untouched and remains the baseline.
+
+## Corpus and evaluation
+
+The Phase 17 corpus is 20 documents under [`corpus/`](corpus/README.md), with a
+SHA-256 manifest and provenance for every document. The golden set in
+[`eval/golden_qa.jsonl`](eval/golden_qa.jsonl) has 42 questions: 30 answerable,
+10 relation-only, and 2 that must be refused. `make corpus-check` validates all
+of it offline, including checking that every expected answer fact appears in the
+cited documents.
+
 
 ## Data Flow
 
@@ -191,10 +206,16 @@ make eval
 
 ```bash
 cd ai/patterns/graph-rag
-make build      # docker build -t boilerplate/graph-rag-api:1.0
-make deploy     # kubectl apply -k .
-make eval       # runs golden Q&A + graph path evaluation
+make corpus-check   # offline: corpus, manifest, golden set
+make db-check       # docker: schema twice + hyperedge round-trip
+make build          # docker build -t boilerplate/graph-rag-api:1.0 mockup
+make deploy         # kubectl apply -k k8s
+make eval           # runs golden Q&A + graph path evaluation
 ```
+
+The `mockup/` app is still the imported keyword demo. Phase 17.3 replaces its
+in-memory store with the schema above.
+
 
 ## References
 

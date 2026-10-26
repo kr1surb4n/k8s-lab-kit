@@ -1,0 +1,29 @@
+name: graph-rag
+
+# Local development database for the Graph RAG pattern.
+# The app and the models stay on the host during Phase 17; only Postgres runs
+# here. `make migrate` applies db/schema.sql (idempotent).
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: graph-rag-postgres
+    environment:
+      POSTGRES_DB: graphrag
+      POSTGRES_USER: graphrag
+      # Local development only; override with GRAPHRAG_DB_PASSWORD.
+      POSTGRES_PASSWORD: ${GRAPHRAG_DB_PASSWORD:-graphrag-dev-only}
+    ports:
+      - "${GRAPHRAG_DB_PORT:-5433}:5432"
+    volumes:
+      - graphrag-pgdata:/var/lib/postgresql/data
+      # Run the schema on first init; `make migrate` is the repeatable path.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U graphrag -d graphrag"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  graphrag-pgdata:

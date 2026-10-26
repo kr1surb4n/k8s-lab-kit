@@ -7,14 +7,19 @@
 #   make eval           # run evaluation against deployed API
 #   make corpus-manifest# regenerate corpus/MANIFEST.json
 #   make corpus-check   # validate the corpus and the golden set
+#   make migrate        # apply the Postgres schema (idempotent)
+#   make db-check       # prove idempotency and the hyperedge encoding
 #   make port-forward   # port-forward for local testing
 #   make clean          # remove k8s resources
 
-.PHONY: build deploy up eval corpus-manifest corpus-check port-forward clean test
+.PHONY: build deploy up eval corpus-manifest corpus-check db-up migrate db-check \
+  db-down db-shell port-forward clean test
 
 IMAGE := boilerplate/graph-rag-api:1.0
 NAMESPACE := k8s-lab
 API_URL := http://localhost:8000
+DB_USER ?= graphrag
+DB_NAME ?= graphrag
 
 build:
 	docker build -t $(IMAGE) mockup
@@ -48,6 +53,30 @@ corpus-manifest:
 # Validate the corpus, its hashes, and the golden questions offline.
 corpus-check:
 	python3 corpus/tools/validate_corpus.py
+
+# Start the local Postgres.
+db-up:
+	docker compose up -d postgres
+	@printf 'waiting for postgres...\n'
+	@until docker compose exec -T postgres pg_isready -U $(DB_USER) -d $(DB_NAME) >/dev/null 2>&1; do sleep 1; done
+
+# Apply the schema; safe to run as often as wanted.
+migrate: db-up
+	docker compose exec -T -e PGOPTIONS='-c client_min_messages=warning' postgres \
+	  psql -v ON_ERROR_STOP=1 -q -U $(DB_USER) -d $(DB_NAME) < db/schema.sql
+	@printf 'schema applied\n'
+
+# Prove the second migrate is a no-op and that hyperedges are stored correctly.
+db-check:
+	./db/check_schema.sh
+
+# Stop and remove the local database (the named volume keeps the data).
+db-down:
+	docker compose down
+
+# Open a psql session against the local database.
+db-shell:
+	docker compose exec postgres psql -U $(DB_USER) -d $(DB_NAME)
 
 # Run the offline checks (the evaluation itself needs the service).
 test: corpus-check
